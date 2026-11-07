@@ -126,6 +126,8 @@ export type PopupState =
   | (PageInfo & { type: 'patch'; items: Item[]; removed: number[] });
 
 interface PageInfo {
+  /** A newer YDM to install by hand (copies that do not update themselves). */
+  update?: { version: string; url: string };
   enabled: boolean;
   /** Smallest download taken over, in bytes. */
   minSize: number;

@@ -3,6 +3,7 @@ import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
 import { pickLocale, setLocale, t, useMachineTranslations } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
 import { cachedTranslation } from '@/lib/translate';
+import { type Available, CHECK_EVERY_MS, latestRelease, updatesItself } from '@/lib/updates';
 import { bytes } from '@/lib/ui/format';
 
 // Translations made by a page with the browser's translator; the
@@ -74,6 +75,8 @@ export default defineBackground(() => {
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   /** Most connections each host accepted before refusing more. */
   let hostCaps: Record<string, HostCap> = {};
+  /** A newer release, for copies that cannot update themselves. */
+  let newerRelease: Available | null = null;
   /** Items changed since open pages last heard; null: send everything. */
   let dirty: Set<number> | null = null;
   let notifyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -109,6 +112,7 @@ export default defineBackground(() => {
       await link.send({ type: 'prune', keep: [...resumed, ...paused] });
     }
     pump();
+    void checkForUpdate();
     // Referer rules of downloads that are no longer running.
     const rules = await browser.declarativeNetRequest.getSessionRules().catch(() => []);
     const stale = rules.map((r) => r.id).filter((id) => !isActive(items.get(id) ?? { state: 'failed' } as Item));
@@ -473,6 +477,26 @@ export default defineBackground(() => {
     update();
   });
 
+  // --- updates ------------------------------------------------------------
+
+  /** Once a day, for a copy installed from GitHub that cannot update itself
+   * (unpacked in Chrome): is there a newer release? */
+  async function checkForUpdate() {
+    const manifest = browser.runtime.getManifest();
+    const repo = import.meta.env.YDM_REPO as string | undefined;
+    if (!repo || updatesItself(manifest)) return;
+    const { updateCheck } = (await browser.storage.local.get('updateCheck')) as {
+      updateCheck?: { at: number; found: Available | null };
+    };
+    let found = updateCheck?.found ?? null;
+    if (!updateCheck || Date.now() - updateCheck.at > CHECK_EVERY_MS) {
+      found = await latestRelease(repo, manifest.version).catch(() => found);
+      await browser.storage.local.set({ updateCheck: { at: Date.now(), found } });
+    }
+    newerRelease = found && found.version !== manifest.version ? found : null;
+    if (newerRelease) notify();
+  }
+
   // --- notifications ------------------------------------------------------
 
   const NOTIFICATION = 'ydm-';
@@ -617,7 +641,7 @@ export default defineBackground(() => {
       downloadId,
       resumable: checkpoint !== undefined,
     });
-    const base = { enabled: settings.enabled, minSize: settings.minSize, settings };
+    const base = { enabled: settings.enabled, minSize: settings.minSize, settings, update: newerRelease ?? undefined };
     if (changed) {
       const list = [...changed].map((id) => items.get(id)).filter((i): i is Entry => !!i);
       const removed = [...changed].filter((id) => !items.has(id));

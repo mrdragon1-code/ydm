@@ -68,6 +68,12 @@ $('grab').addEventListener('click', async () => {
 });
 
 function render(view: View) {
+  const update = $('update');
+  update.hidden = !view.update;
+  if (view.update) {
+    $('updateText').textContent = t('update.available', { version: view.update.version });
+    $<HTMLAnchorElement>('updateLink').href = view.update.url;
+  }
   toggle.checked = view.enabled;
   off.hidden = view.enabled;
   syncList(

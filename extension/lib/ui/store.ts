@@ -18,6 +18,7 @@ export interface View {
   enabled: boolean;
   minSize: number;
   settings: Settings;
+  update?: { version: string; url: string };
   /** Ids changed since the last render; null after a full snapshot. */
   changed: Set<number> | null;
 }
@@ -49,7 +50,7 @@ export function connect(render: (view: View) => void): (cmd: PopupCommand) => vo
       changed = null;
       void offerTranslation(lang, () => last && render({ ...last, changed: null }));
     }
-    last = { items, enabled: msg.enabled, minSize: msg.minSize, settings: msg.settings, changed };
+    last = { items, enabled: msg.enabled, minSize: msg.minSize, settings: msg.settings, update: msg.update, changed };
     render(last);
   });
   return (cmd) => port.postMessage(cmd);

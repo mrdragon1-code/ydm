@@ -25,6 +25,11 @@ redirects it), exactly as the browser would. The browser attaches that site's ow
 and, like the browser, YDM sends the address of the page the download came from as the
 Referer (only the site's origin when the file is on another site).
 
+A copy installed from GitHub that cannot update itself (loaded unpacked in Chrome)
+asks GitHub's public API once a day for the latest YDM version number, to offer the
+update. No information about you or your downloads is sent. Copies from the stores
+are updated by the stores.
+
 ## Permissions, and why
 
 | Permission | Why |

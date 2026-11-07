@@ -178,5 +178,9 @@
     "progress": "Traduzione in corso… {pct}",
     "failed": "Il browser non è riuscito a tradurre YDM. Resta in inglese.",
     "machine": "tradotta dal browser"
+  },
+  "update": {
+    "available": "È disponibile YDM {version}",
+    "get": "Scaricalo"
   }
 }

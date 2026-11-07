@@ -49,7 +49,7 @@ jobs:
 
       - name: Build Chrome and Firefox
         run: |
-          npm run build
+          npm run build:e2e
           npm run build:firefox
 
       - name: Lint the Firefox add-on

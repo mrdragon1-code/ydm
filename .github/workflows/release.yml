@@ -1,13 +1,23 @@
 name: Release
 
-# Push a tag like v1.0.0 (matching "version" in extension/package.json):
-# builds the zips, attaches them to a GitHub release, and submits them to
-# each store whose credentials are set as repository secrets. A store
-# without secrets is skipped with a notice, so the GitHub release always
-# happens.
+# Fully automatic: raise "version" in extension/package.json and push to
+# main. When CI has passed, this workflow tags the commit, builds the zips,
+# publishes a GitHub release and submits to every store whose credentials
+# are set as repository secrets. A store without secrets is skipped with a
+# notice, so the GitHub release always happens.
+#
+# Firefox goes one of two ways (AMO refuses the same version twice), chosen
+# by the repository variable FIREFOX_DISTRIBUTION:
+#   amo (default)  submitted to addons.mozilla.org; AMO updates every copy
+#                  with the ID ydm@yamantau, including ones signed earlier.
+#   github         signed unlisted with an update_url pointing at this
+#                  repository's latest release; updates.json is published
+#                  with each release and Firefox updates itself from it.
 on:
-  push:
-    tags: ['v*']
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -18,50 +28,99 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: extension
+    env:
+      YDM_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The commit CI tested, not whatever main is now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Is this a new version?
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version is already released; nothing to do"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: extension/package-lock.json
 
-      - run: npm ci
-
-      - name: Tag matches package.json
-        if: github.ref_type == 'tag'
-        run: |
-          version=$(node -p "require('./package.json').version")
-          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::tag ${GITHUB_REF_NAME} but package.json says $version"
-            exit 1
-          fi
-
-      - run: npm run check
-      - run: npm test
+      - if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+        run: npm ci
 
       - name: Zip for Chrome, Edge and Firefox
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         run: |
           npx wxt zip
           npx wxt zip -b firefox
           ls -l .output/*.zip
 
-      - name: GitHub release
-        if: github.ref_type == 'tag'
+      - name: Firefox build for GitHub, signed, with self-updates
+        id: selfhosted
+        if: steps.version.outputs.new == 'true' && github.event_name != 'workflow_dispatch' && vars.FIREFOX_DISTRIBUTION == 'github'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
+            echo "::notice::Firefox self-updating build skipped: AMO keys not set"
+            exit 0
+          fi
+          YDM_SELF_HOSTED=1 npx wxt build -b firefox
+          npx web-ext sign --channel unlisted --source-dir .selfhosted/firefox-mv2 \
+            --artifacts-dir .selfhosted/signed --upload-source-code ".output/ydm-extension-$VERSION-sources.zip"
+          xpi=$(ls .selfhosted/signed/*.xpi | head -1)
+          cp "$xpi" ".output/ydm-$VERSION-firefox.xpi"
+          node -e '
+            const v = process.env.VERSION, repo = process.env.YDM_REPO;
+            const crypto = require("crypto"), fs = require("fs");
+            const file = `.output/ydm-${v}-firefox.xpi`;
+            const hash = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+            const updates = { addons: { "ydm@yamantau": { updates: [{
+              version: v,
+              update_link: `https://github.com/${repo}/releases/download/v${v}/ydm-${v}-firefox.xpi`,
+              update_hash: `sha256:${hash}`,
+            }] } } };
+            fs.writeFileSync(".output/updates.json", JSON.stringify(updates, null, 2));
+          '
+          echo "assets=.output/ydm-$VERSION-firefox.xpi .output/updates.json" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and GitHub release
+        if: steps.version.outputs.new == 'true' && github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" .output/*-chrome.zip .output/*-firefox.zip .output/*-sources.zip \
-            --title "YDM ${GITHUB_REF_NAME}" --generate-notes --verify-tag
+          gh release create "v$VERSION" \
+            .output/*-chrome.zip .output/*-firefox.zip .output/*-sources.zip ${{ steps.selfhosted.outputs.assets }} \
+            --target "$SHA" --title "YDM $VERSION" --generate-notes
 
       - name: Submit to the stores
+        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
@@ -75,6 +134,7 @@ jobs:
           EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
           EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          FIREFOX_DISTRIBUTION: ${{ vars.FIREFOX_DISTRIBUTION }}
         run: |
           args=()
           if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_REFRESH_TOKEN" ]; then
@@ -82,7 +142,9 @@ jobs:
           else
             echo "::notice::Chrome Web Store skipped: secrets not set"
           fi
-          if [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
+          if [ "$FIREFOX_DISTRIBUTION" = "github" ]; then
+            echo "::notice::Firefox: distributed from GitHub (self-updating build above), not AMO"
+          elif [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
             args+=(--firefox-zip .output/*-firefox.zip --firefox-sources-zip .output/*-sources.zip)
           else
             echo "::notice::Firefox Add-ons skipped: secrets not set"

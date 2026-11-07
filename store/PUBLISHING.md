@@ -1,7 +1,28 @@
 # Publishing YDM
 
-Once each store is set up, a release is just: raise `version` in `extension/package.json`,
-commit, `git tag vX.Y.Z && git push --tags`. The *Release* workflow does the rest.
+Once each store is set up, a release is just: raise `version` in `extension/package.json`
+and push to `main`. When CI passes, the *Release* workflow tags the commit, publishes the
+GitHub release and submits to every store whose secrets are set. Pushing without a new
+version releases nothing.
+
+## Automatic updates, for everyone
+
+| Installed from | Updates |
+|---|---|
+| Chrome Web Store / Edge Add-ons | the store, automatically |
+| addons.mozilla.org | AMO, automatically |
+| GitHub, Firefox (`.xpi`) | Firefox itself, from this repository's `updates.json` — only with `FIREFOX_DISTRIBUTION=github` |
+| GitHub, Chrome (unpacked) | Chrome cannot; the popup shows "YDM x.y is available" with a link |
+
+Firefox can be updated by AMO **or** from GitHub, not both: AMO signs each version only once.
+The repository variable `FIREFOX_DISTRIBUTION` (*Settings → Secrets and variables → Actions →
+Variables*) picks one: `amo` (default, recommended once listed) or `github`.
+
+## Dependencies
+
+Dependabot proposes updates every week; minor and patch ones merge themselves once CI
+passes. Turn on *Settings → General → Allow auto-merge*, and protect `main` requiring the
+*CI / test* check (*Settings → Branches*), so nothing merges untested.
 
 Never paste keys or tokens into an issue, a commit or a chat: only into GitHub's
 **Settings → Secrets and variables → Actions**.

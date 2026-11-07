@@ -113,9 +113,11 @@ page would be stopped in the middle of a download.
 
 ## Releasing
 
-Raise `version` in `extension/package.json`, commit, then tag: `git tag v1.0.1 && git push --tags`.
-The *Release* workflow builds the zips, attaches them to a GitHub release and submits them
-to every store whose secrets are set (see [store/PUBLISHING.md](store/PUBLISHING.md)).
+Raise `version` in `extension/package.json` and push to `main`. When CI passes, the *Release*
+workflow tags the commit, attaches the zips to a GitHub release and submits them to every
+store whose secrets are set; installed copies then update themselves (see
+[store/PUBLISHING.md](store/PUBLISHING.md)). Dependabot keeps dependencies current; minor
+updates merge themselves when CI passes.
 
 ## License
 

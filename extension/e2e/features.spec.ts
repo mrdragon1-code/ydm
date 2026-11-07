@@ -1,5 +1,7 @@
 import { type BrowserContext, test as base, chromium, expect, type Page, type Worker } from '@playwright/test';
 import { type ChildProcess, spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 // The 1.0 features: languages, the downloads page, adding URLs, picking a
@@ -204,6 +206,38 @@ test("picking a page's links queues the chosen ones", async ({ context, worker, 
   await page.locator('#grabSubmit').click();
   await expect(page.locator('#grab')).toBeHidden();
   await expect(page.locator('#list li', { hasText: 'game.iso' })).toHaveCount(1);
+});
+
+test('a copy that cannot update itself offers the newer release', async () => {
+  // The check runs when the background starts, so: store a result as if the
+  // daily check had found a newer release, close the browser, open it again.
+  const profile = mkdtempSync(path.join(tmpdir(), 'ydm-update-'));
+  const launch = () =>
+    chromium.launchPersistentContext(profile, {
+      channel: 'chromium',
+      headless: true,
+      args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
+    });
+  try {
+    let context = await launch();
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const id = new URL(worker.url()).host;
+    await worker.evaluate(() =>
+      (globalThis as Ext).chrome.storage.local.set({
+        updateCheck: { at: Date.now(), found: { version: '99.0.0', url: 'https://github.com/me/ydm/releases/tag/v99.0.0' } },
+      }),
+    );
+    await context.close();
+    context = await launch();
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${id}/popup.html`);
+    // `npm run build:e2e` sets a repository, as release builds have.
+    await expect(popup.locator('#update')).toContainText('YDM 99.0.0 is available');
+    await expect(popup.locator('#updateLink')).toHaveAttribute('href', 'https://github.com/me/ydm/releases/tag/v99.0.0');
+    await context.close();
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
+  }
 });
 
 test('pages hold together at their sizes, in light and dark', async ({ context, id }) => {

@@ -183,5 +183,9 @@
     "progress": "Translating… {pct}",
     "failed": "The browser could not translate YDM. It stays in English.",
     "machine": "translated by the browser"
+  },
+  "update": {
+    "available": "YDM {version} is available",
+    "get": "Get it"
   }
 }

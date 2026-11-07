@@ -4,6 +4,16 @@ import { defineConfig } from 'wxt';
 
 const LOCALES = path.resolve(import.meta.dirname, 'locales');
 
+/** The GitHub repository, "owner/name", for links and self-updates. */
+const REPO = process.env.YDM_REPO || JSON.parse(readFileSync(path.join(import.meta.dirname, 'package.json'), 'utf8')).ydmRepo;
+
+/**
+ * Builds signed for installing from GitHub (not from addons.mozilla.org)
+ * update themselves: Firefox checks this file, which each release
+ * publishes. AMO builds must not carry it; AMO updates them itself.
+ */
+const SELF_HOSTED = process.env.YDM_SELF_HOSTED === '1';
+
 /** The extension's name and description in every language, for the
  * browser's own `_locales` (toolbar, extensions page, store listings).
  * Everything else is translated at runtime by lib/i18n.ts. */
@@ -29,6 +39,12 @@ function manifestLocales() {
 }
 
 export default defineConfig({
+  // The self-updating Firefox build goes elsewhere, not to replace the AMO one.
+  outDir: SELF_HOSTED ? '.selfhosted' : '.output',
+  vite: () => ({
+    // Seen by the code as import.meta.env.YDM_REPO.
+    define: { 'import.meta.env.YDM_REPO': JSON.stringify(REPO ?? '') },
+  }),
   // `npm run dev` does not open a separate browser: load .output/chrome-mv3-dev
   // once in your own Chrome and it reloads itself on every change.
   // (web-ext is installed for the Firefox end-to-end test.)
@@ -43,6 +59,7 @@ export default defineConfig({
     short_name: '__MSG_extShortName__',
     description: '__MSG_extDescription__',
     default_locale: 'en',
+    ...(REPO && { homepage_url: `https://github.com/${REPO}` }),
     permissions: [
       'downloads',
       'storage',
@@ -67,6 +84,8 @@ export default defineConfig({
           id: 'ydm@yamantau',
           strict_min_version: '140.0',
           data_collection_permissions: { required: ['none'] },
+          ...(SELF_HOSTED &&
+            REPO && { update_url: `https://github.com/${REPO}/releases/latest/download/updates.json` }),
         },
         // Desktop only: Firefox for Android has no downloads API to take over.
         gecko_android: { strict_min_version: '142.0' },

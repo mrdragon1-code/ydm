@@ -63,6 +63,28 @@ header .switch {
   font-size: 12px;
 }
 
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--hover);
+  font-size: 12px;
+}
+
+.update[hidden] {
+  display: none;
+}
+
+.update .button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  text-decoration: none;
+}
+
 .off,
 .notice {
   padding: 8px 14px;
