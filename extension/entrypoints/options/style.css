@@ -78,11 +78,6 @@ select,
 input[type='text'] {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--raised);
-  color: var(--ink);
-  font: inherit;
 }
 
 select {
@@ -153,20 +148,11 @@ input[type='range'] {
   min-width: 0;
 }
 
-.button {
+.add .button {
   min-height: 34px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--malachite);
-  color: var(--on-malachite);
-  font: 550 13px/1 var(--sans);
-  cursor: pointer;
 }
 
-.button:hover {
-  filter: brightness(1.08);
-}
+
 
 .error {
   min-height: 0;
@@ -199,10 +185,7 @@ input[type='range'] {
   display: none;
 }
 
-.sites .link {
-  font: 13px/1 var(--sans);
-}
-
+.sites 
 #noSites[hidden] {
   display: none;
 }
@@ -216,23 +199,11 @@ input[type='range'] {
   cursor: pointer;
 }
 
-.link:hover {
-  color: var(--ink);
-  text-decoration: underline;
-}
 
 footer {
   margin-top: 36px;
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
 
 @media (max-width: 480px) {
   main {

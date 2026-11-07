@@ -1,6 +1,10 @@
+import { bcp47, LOCALES, pickLocale, setLocale, t, translatePage } from '@/lib/i18n';
 import { DEFAULT_SETTINGS, LIMITS, normalizeHost, readSettings, SETTING_KEYS, type Settings } from '@/lib/policy';
+import { bytes, speed } from '@/lib/ui/format';
 
 const MB = 1024 * 1024;
+const MIN_SIZES = [1, 5, 10, 25, 50, 100];
+const SPEED_LIMITS = [0, 1, 2, 5, 10, 25, 50, 100];
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const enabled = $<HTMLInputElement>('enabled');
@@ -10,6 +14,9 @@ const connectionsValue = $<HTMLOutputElement>('connectionsValue');
 const preview = $<HTMLElement>('preview');
 const parallel = $<HTMLElement>('parallel');
 const programs = $<HTMLInputElement>('programsToBrowser');
+const checksum = $<HTMLInputElement>('checksum');
+const notify = $<HTMLInputElement>('notify');
+const language = $<HTMLSelectElement>('language');
 const speedLimit = $<HTMLSelectElement>('speedLimit');
 const site = $<HTMLInputElement>('site');
 const siteError = $<HTMLElement>('siteError');
@@ -18,22 +25,52 @@ const noSites = $<HTMLElement>('noSites');
 const status = $<HTMLElement>('status');
 
 let current: Settings = { ...DEFAULT_SETTINGS };
+let shownLanguage: string | null = null;
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function save(change: Partial<Settings>) {
   await browser.storage.local.set(change);
-  status.textContent = 'Salvato';
+  status.textContent = t('settings.saved');
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => (status.textContent = ''), 1600);
 }
 
-function render(s: Settings) {
+/** Options whose labels depend on the language. */
+function fillChoices(s: Settings) {
+  const minMb = Math.round(s.minSize / MB);
+  const sizes = [...new Set([...MIN_SIZES, minMb])].sort((a, b) => a - b);
+  minSize.replaceChildren(...sizes.map((mb) => new Option(bytes(mb * MB), String(mb))));
+  const limitMb = Math.round(s.speedLimit / MB);
+  const limits = [...new Set([...SPEED_LIMITS, limitMb])].sort((a, b) => a - b);
+  speedLimit.replaceChildren(
+    ...limits.map((mb) => new Option(mb ? speed(mb * MB) : t('settings.speedLimitNone'), String(mb))),
+  );
+  // Each language named in itself, so anyone can find their own.
+  const names = (code: string) => {
+    try {
+      return new Intl.DisplayNames([bcp47(code)], { type: 'language' }).of(bcp47(code)) ?? code;
+    } catch {
+      return code;
+    }
+  };
+  language.replaceChildren(
+    new Option(t('settings.languageAuto'), 'auto'),
+    ...LOCALES.map((code) => new Option(names(code), code)).sort((a, b) => a.text.localeCompare(b.text)),
+  );
+}
+
+async function render(s: Settings) {
   current = s;
+  if (s.language !== shownLanguage) {
+    shownLanguage = s.language;
+    await setLocale(pickLocale(s.language));
+    translatePage();
+    document.title = t('settings.title');
+  }
+  fillChoices(s);
   enabled.checked = s.enabled;
-  const mb = Math.round(s.minSize / MB);
-  // A value set elsewhere that is not one of the choices still shows.
-  if (![...minSize.options].some((o) => Number(o.value) === mb)) minSize.add(new Option(`${mb} MB`, String(mb)));
-  minSize.value = String(mb);
+  minSize.value = String(Math.round(s.minSize / MB));
+  connections.max = String(LIMITS.connections[1]);
   connections.value = String(s.connections);
   showConnections(s.connections);
   for (const b of parallel.querySelectorAll('button')) {
@@ -42,20 +79,20 @@ function render(s: Settings) {
     b.tabIndex = on ? 0 : -1;
   }
   programs.checked = s.programsToBrowser;
-  const limitMb = Math.round(s.speedLimit / MB);
-  if (![...speedLimit.options].some((o) => Number(o.value) === limitMb)) {
-    speedLimit.add(new Option(`${limitMb} MB/s`, String(limitMb)));
-  }
-  speedLimit.value = String(limitMb);
+  checksum.checked = s.checksum;
+  notify.checked = s.notify;
+  language.value = s.language;
+  speedLimit.value = String(Math.round(s.speedLimit / MB));
   excluded.replaceChildren(
     ...s.excluded.map((host) => {
       const li = document.createElement('li');
       const name = document.createElement('span');
       name.textContent = host;
       const remove = document.createElement('button');
+      remove.type = 'button';
       remove.className = 'link';
-      remove.textContent = 'Togli';
-      remove.setAttribute('aria-label', `Togli ${host}`);
+      remove.textContent = t('settings.siteRemove');
+      remove.setAttribute('aria-label', t('settings.siteRemoveLabel', { host }));
       remove.addEventListener('click', () => void save({ excluded: current.excluded.filter((h) => h !== host) }));
       li.append(name, remove);
       return li;
@@ -76,7 +113,7 @@ function showConnections(n: number) {
   preview.style.backgroundImage = `linear-gradient(90deg, ${stops.join(', ')})`;
 }
 
-// Download contemporanei: one button per choice, arrow keys move between them.
+// Simultaneous downloads: one button per choice, arrow keys move between them.
 for (let n = LIMITS.parallel[0]; n <= LIMITS.parallel[1]; n++) {
   const b = document.createElement('button');
   b.type = 'button';
@@ -99,13 +136,16 @@ minSize.addEventListener('change', () => void save({ minSize: Number(minSize.val
 connections.addEventListener('input', () => showConnections(Number(connections.value)));
 connections.addEventListener('change', () => void save({ connections: Number(connections.value) }));
 programs.addEventListener('change', () => void save({ programsToBrowser: programs.checked }));
+checksum.addEventListener('change', () => void save({ checksum: checksum.checked }));
+notify.addEventListener('change', () => void save({ notify: notify.checked }));
+language.addEventListener('change', () => void save({ language: language.value }));
 speedLimit.addEventListener('change', () => void save({ speedLimit: Number(speedLimit.value) * MB }));
 
 $<HTMLFormElement>('addSite').addEventListener('submit', (e) => {
   e.preventDefault();
   const host = normalizeHost(site.value);
   if (!host) {
-    siteError.textContent = 'Non è un indirizzo di un sito. Scrivi per esempio mega.nz o www.esempio.it.';
+    siteError.textContent = t('settings.siteInvalid');
     return;
   }
   siteError.textContent = '';
@@ -123,7 +163,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 async function load() {
-  render(readSettings(await browser.storage.local.get(SETTING_KEYS)));
+  await render(readSettings(await browser.storage.local.get(SETTING_KEYS)));
 }
 
 void load();

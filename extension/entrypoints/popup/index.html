@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -10,23 +10,39 @@
     <header>
       <span class="mark">YDM</span>
       <span id="summary" class="summary" aria-live="polite"></span>
-      <button id="settings" class="icon" title="Impostazioni" aria-label="Impostazioni">
+      <button id="add" class="icon" type="button" data-i18n-title="popup.add" data-i18n-label="popup.add" aria-expanded="false" aria-controls="adder">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
+      </button>
+      <button id="grab" class="icon" type="button" data-i18n-title="popup.grab" data-i18n-label="popup.grab">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10M3 6.5h10M3 9.5h5M11 9v4.5M9 11.5l2 2 2-2" /></svg>
+      </button>
+      <button id="settings" class="icon" type="button" data-i18n-title="popup.settings" data-i18n-label="popup.settings">
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6" />
           <circle cx="10" cy="4.5" r="1.5" />
           <circle cx="6" cy="11.5" r="1.5" />
         </svg>
       </button>
-      <input type="checkbox" id="enabled" class="switch" role="switch" aria-label="YDM attivo" title="YDM attivo" />
+      <input type="checkbox" id="enabled" class="switch" role="switch" data-i18n-label="popup.toggle" data-i18n-title="popup.toggle" />
     </header>
-    <p id="off" class="off" hidden>YDM è spento: i download li fa il browser.</p>
-    <ul id="list"></ul>
-    <div id="empty" class="empty">
-      <p>Nessun download per ora.</p>
+    <form id="adder" class="adder" hidden novalidate>
+      <label for="urls" class="visually-hidden" data-i18n="popup.add"></label>
+      <textarea id="urls" rows="3" spellcheck="false" data-i18n-placeholder="popup.addPlaceholder"></textarea>
+      <div class="adder-row">
+        <span id="addStatus" class="status" role="status"></span>
+        <button type="submit" class="button" data-i18n="popup.addSubmit"></button>
+      </div>
+    </form>
+    <p id="off" class="off" hidden data-i18n="popup.off"></p>
+    <p id="notice" class="notice" role="status" hidden></p>
+    <ul id="list" class="rows"></ul>
+    <div id="empty" class="empty" hidden>
+      <p data-i18n="popup.empty"></p>
       <p class="hint" id="hint"></p>
     </div>
     <footer>
-      <button id="clear" class="link" hidden>Togli dalla lista i finiti</button>
+      <button id="clear" class="link" type="button" hidden data-i18n="popup.clear"></button>
+      <button id="all" class="link" type="button" data-i18n="popup.all"></button>
     </footer>
     <script type="module" src="./main.ts"></script>
   </body>

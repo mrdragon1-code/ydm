@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YDM</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <span class="mark">YDM</span>
+      <h1 data-i18n="downloads.heading"></h1>
+      <span id="summary" class="summary" aria-live="polite"></span>
+      <button id="add" class="icon" type="button" data-i18n-title="popup.add" data-i18n-label="popup.add" aria-expanded="false" aria-controls="adder">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
+      </button>
+      <button id="settings" class="icon" type="button" data-i18n-title="popup.settings" data-i18n-label="popup.settings">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6" />
+          <circle cx="10" cy="4.5" r="1.5" />
+          <circle cx="6" cy="11.5" r="1.5" />
+        </svg>
+      </button>
+    </header>
+
+    <form id="adder" class="adder" hidden novalidate>
+      <label for="urls" class="visually-hidden" data-i18n="popup.add"></label>
+      <textarea id="urls" rows="3" spellcheck="false" data-i18n-placeholder="popup.addPlaceholder"></textarea>
+      <div class="adder-row">
+        <span id="addStatus" class="status" role="status"></span>
+        <button type="submit" class="button" data-i18n="popup.addSubmit"></button>
+      </div>
+    </form>
+
+    <section id="grab" class="grab" hidden aria-labelledby="grabTitle">
+      <div class="grab-head">
+        <h2 id="grabTitle"></h2>
+        <button id="grabClose" class="icon" type="button" data-i18n-label="action.cancel" data-i18n-title="action.cancel">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
+        </button>
+      </div>
+      <p id="grabMessage" class="status"></p>
+      <div id="grabTypes" class="chips" role="group" data-i18n-label="downloads.grabTypes"></div>
+      <label class="check"><input type="checkbox" id="grabAll" /> <span data-i18n="downloads.grabSelectAll"></span></label>
+      <ul id="grabList" class="picks"></ul>
+      <div class="grab-foot">
+        <button id="grabSubmit" class="button" type="button" disabled></button>
+      </div>
+    </section>
+
+    <main class="layout">
+      <section class="listing">
+        <div class="tools">
+          <label for="search" class="visually-hidden" data-i18n="downloads.search"></label>
+          <input id="search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="downloads.searchPlaceholder" />
+          <div class="filters" role="radiogroup" data-i18n-label="downloads.filter" id="filters">
+            <button type="button" role="radio" data-filter="all" data-i18n="downloads.filterAll"></button>
+            <button type="button" role="radio" data-filter="active" data-i18n="downloads.filterActive"></button>
+            <button type="button" role="radio" data-filter="completed" data-i18n="downloads.filterCompleted"></button>
+            <button type="button" role="radio" data-filter="problems" data-i18n="downloads.filterProblems"></button>
+          </div>
+        </div>
+        <ul id="list" class="rows selectable" aria-live="off"></ul>
+        <p id="empty" class="empty" hidden data-i18n="downloads.empty"></p>
+        <footer class="list-foot">
+          <span id="count" class="status"></span>
+          <button id="clear" class="link" type="button" data-i18n="popup.clear"></button>
+        </footer>
+      </section>
+
+      <aside id="details" class="details" aria-live="polite">
+        <p id="detailsEmpty" class="status" data-i18n="downloads.detailsEmpty"></p>
+        <div id="detailsBody" hidden>
+          <h2 id="dName" class="d-name"></h2>
+          <div id="dBar" class="segbar big"></div>
+          <p id="dState" class="d-state"></p>
+          <dl class="facts">
+            <dt data-i18n="downloads.url"></dt>
+            <dd><a id="dUrl" class="mono" target="_blank" rel="noreferrer noopener"></a></dd>
+            <dt data-i18n="downloads.size"></dt>
+            <dd id="dSize" class="mono"></dd>
+            <dt data-i18n="downloads.time"></dt>
+            <dd id="dTime" class="mono"></dd>
+            <dt data-i18n="downloads.avgSpeed"></dt>
+            <dd id="dSpeed" class="mono"></dd>
+            <dt data-i18n="downloads.connections"></dt>
+            <dd id="dConns" class="mono"></dd>
+            <dt data-i18n="downloads.sha256"></dt>
+            <dd>
+              <span id="dHash" class="mono hash"></span>
+              <button id="dCopy" class="link" type="button" data-i18n="downloads.copy" hidden></button>
+            </dd>
+          </dl>
+          <div id="dCompare" class="compare" hidden>
+            <label for="dCheck" data-i18n="downloads.compare"></label>
+            <input id="dCheck" type="text" spellcheck="false" autocomplete="off" />
+            <p id="dVerdict" class="verdict" role="status"></p>
+          </div>
+          <div id="dActions" class="d-actions"></div>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

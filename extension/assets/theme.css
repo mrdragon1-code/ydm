@@ -130,3 +130,198 @@ body {
     animation: none !important;
   }
 }
+
+/* --- Shared controls ------------------------------------------------- */
+
+.icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* `display: grid` would otherwise override the hidden attribute. */
+.icon[hidden] {
+  display: none;
+}
+
+.icon:hover,
+.icon[aria-expanded='true'] {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--malachite);
+  color: var(--on-malachite);
+  font: 550 13px/1 var(--sans);
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}
+
+.link {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+input[type='text'],
+input[type='search'],
+textarea,
+select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- A download row (popup and downloads page) ----------------------- */
+
+.rows {
+  list-style: none;
+}
+
+.rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 11px 10px 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rows .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.rows .segbar {
+  margin: 7px 0 6px;
+}
+
+.rows .meta {
+  display: flex;
+  gap: 8px;
+  color: var(--muted);
+  font: 11px/1.5 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows .meta .text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rows .meta .conns {
+  flex: none;
+}
+
+.rows li .actions {
+  grid-row: 1 / span 3;
+  grid-column: 2;
+  align-self: start;
+  display: flex;
+  gap: 2px;
+}
+
+.rows li[data-state='paused'] .segbar {
+  opacity: 0.55;
+}
+
+.rows li[data-state='completed'] .segbar {
+  background-color: var(--malachite);
+}
+
+.rows li[data-state='failed'] .meta {
+  color: var(--bad);
+}
+
+.rows li[data-state='browser'] .meta {
+  color: var(--note);
+}
+
+/* A reason is worth reading in full, and in the body face. */
+.rows li:is([data-state='failed'], [data-state='browser']) .meta .text {
+  white-space: normal;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.rows li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .segbar {
+  display: none;
+}
+
+.rows li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .name {
+  margin-bottom: 3px;
+}
+
+.rows li[data-state='cancelled'] .name {
+  color: var(--muted);
+}
+
+.rows li.indeterminate .segbar {
+  background-image: linear-gradient(90deg, transparent 0 35%, var(--malachite) 35% 65%, transparent 65%);
+  background-size: 50% 100%;
+  animation: sweep 1.3s linear infinite;
+}
+
+@keyframes sweep {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}

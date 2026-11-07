@@ -53,6 +53,10 @@ export default defineConfig({
       'webRequest',
       // Adds the page's Referer to YDM's own requests, as the browser would.
       'declarativeNetRequestWithHostAccess',
+      // "Download all links": reads the links of the page you ask it to.
+      'scripting',
+      // "Download complete", with a button to show the file.
+      'notifications',
       ...(browser === 'firefox' ? [] : ['offscreen']),
     ],
     // Fetching a download from any site, with that site's cookies.
@@ -61,9 +65,11 @@ export default defineConfig({
       browser_specific_settings: {
         gecko: {
           id: 'ydm@yamantau',
-          strict_min_version: '128.0',
+          strict_min_version: '140.0',
           data_collection_permissions: { required: ['none'] },
         },
+        // Desktop only: Firefox for Android has no downloads API to take over.
+        gecko_android: { strict_min_version: '142.0' },
       },
     }),
   }),

@@ -5,6 +5,7 @@
  */
 
 import DownloadWorker from './download-worker?worker';
+import HashWorker from './hash-worker?worker';
 import type { EngineCommand, EngineEvent, WorkerEvent } from './protocol';
 
 const DIR = 'ydm';
@@ -18,6 +19,10 @@ interface Job {
   max?: number;
   /** Paused: keep the partial file when the worker stops. */
   keep?: boolean;
+  checksum?: boolean;
+  /** The file is deleted once both the browser's copy and the hash are done. */
+  copied?: boolean;
+  hashing?: Promise<void>;
 }
 
 export class Engine {
@@ -46,8 +51,15 @@ export class Engine {
         if (job) job.max = cmd.max;
         return job?.worker?.postMessage({ type: 'connections', max: cmd.max });
       }
-      case 'release':
+      case 'release': {
+        // The browser has its copy; the hash may still be reading the file.
+        const job = this.jobs.get(cmd.id);
+        if (job?.hashing) {
+          job.copied = true;
+          return void job.hashing.then(() => this.release(cmd.id));
+        }
         return void this.release(cmd.id);
+      }
       case 'prune':
         // Partial files of downloads that will not be resumed.
         this.cleaned = this.removeExcept(new Set(cmd.keep.map(fileName)));
@@ -55,9 +67,9 @@ export class Engine {
     }
   }
 
-  private async start({ id, url, name, connections, resume, limit }: Extract<EngineCommand, { type: 'add' }>) {
+  private async start({ id, url, name, connections, resume, limit, checksum }: Extract<EngineCommand, { type: 'add' }>) {
     const worker = new DownloadWorker();
-    const job: Job = { worker, limit, max: connections };
+    const job: Job = { worker, limit, max: connections, checksum };
     this.jobs.set(id, job);
     await this.cleaned;
     worker.onmessage = (e: MessageEvent<WorkerEvent>) => void this.onWorker(id, e.data);
@@ -83,7 +95,9 @@ export class Engine {
           // A disk-backed blob: the browser copies it without loading it in memory.
           const file = await (await this.dir()).getFileHandle(fileName(id));
           const blobUrl = URL.createObjectURL(await file.getFile());
-          this.jobs.set(id, { blobUrl });
+          const done: Job = { blobUrl };
+          if (this.jobs.get(id)?.checksum) done.hashing = this.hash(id);
+          this.jobs.set(id, done);
           this.emit({ type: 'ready', id, name: msg.name, blobUrl });
         } catch (e) {
           this.emit({ type: 'failed', id, reason: { key: 'reason.engine', params: { detail: String(e) } }, retryInBrowser: true });
@@ -103,6 +117,27 @@ export class Engine {
         return this.emit({ type: 'cancelled', id });
       }
     }
+  }
+
+  /** SHA-256 of a finished file, in its own worker, while the browser
+   * copies it. A failure only means no hash is shown. */
+  private hash(id: number): Promise<void> {
+    return new Promise((resolve) => {
+      const worker = new HashWorker();
+      const finish = () => {
+        worker.terminate();
+        resolve();
+      };
+      worker.onmessage = (e: MessageEvent<{ sha256?: string }>) => {
+        if (e.data.sha256) this.emit({ type: 'hashed', id, sha256: e.data.sha256 });
+        finish();
+      };
+      worker.onerror = (e) => {
+        e.preventDefault();
+        finish();
+      };
+      worker.postMessage({ file: fileName(id) });
+    });
   }
 
   private stop(id: number) {

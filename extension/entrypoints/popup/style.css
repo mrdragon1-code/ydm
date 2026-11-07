@@ -1,15 +1,23 @@
 @import '../../assets/theme.css';
 
 body {
-  width: 360px;
+  width: 380px;
 }
 
 header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 10px 12px 10px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+header .mark {
+  margin-right: 6px;
+}
+
+header .switch {
+  margin-left: 6px;
 }
 
 .summary {
@@ -21,42 +29,42 @@ header {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-right: 4px;
 }
 
-.icon {
-  flex: none;
+.adder {
   display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--hover);
 }
 
-/* `display: grid` would otherwise override the hidden attribute. */
-.icon[hidden] {
+.adder[hidden] {
   display: none;
 }
 
-.icon:hover {
-  background: var(--hover);
-  color: var(--ink);
+.adder textarea {
+  width: 100%;
+  padding: 8px 10px;
+  resize: vertical;
+  font: 12px/1.5 var(--mono);
 }
 
-.icon svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.adder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.off {
+.status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.off,
+.notice {
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
   background: var(--hover);
@@ -68,104 +76,6 @@ header {
   list-style: none;
   max-height: 440px;
   overflow-y: auto;
-}
-
-#list li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: 8px;
-  align-items: center;
-  padding: 11px 10px 11px 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 550;
-}
-
-.segbar {
-  margin: 7px 0 6px;
-}
-
-.meta {
-  display: flex;
-  gap: 8px;
-  color: var(--muted);
-  font: 11px/1.5 var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.meta .text {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.meta .conns {
-  flex: none;
-}
-
-li .actions {
-  grid-row: 1 / span 3;
-  grid-column: 2;
-  align-self: start;
-  display: flex;
-  gap: 2px;
-}
-
-li[data-state='paused'] .segbar {
-  opacity: 0.55;
-}
-
-li[data-state='completed'] .segbar {
-  background-color: var(--malachite);
-}
-
-li[data-state='failed'] .meta {
-  color: var(--bad);
-}
-
-li[data-state='browser'] .meta {
-  color: var(--note);
-}
-
-/* A reason is worth reading in full, and in the body face. */
-li:is([data-state='failed'], [data-state='browser']) .meta .text {
-  white-space: normal;
-  font-family: var(--sans);
-  font-size: 12px;
-}
-
-li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .segbar {
-  display: none;
-}
-
-li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .name {
-  margin-bottom: 3px;
-}
-
-li[data-state='cancelled'] .name {
-  color: var(--muted);
-}
-
-li.indeterminate .segbar {
-  background-image: linear-gradient(90deg, transparent 0 35%, var(--malachite) 35% 65%, transparent 65%);
-  background-size: 50% 100%;
-  animation: sweep 1.3s linear infinite;
-}
-
-@keyframes sweep {
-  from {
-    background-position: -100% 0;
-  }
-  to {
-    background-position: 200% 0;
-  }
 }
 
 .empty {
@@ -185,24 +95,11 @@ li.indeterminate .segbar {
 
 footer {
   display: flex;
-  justify-content: flex-end;
-  padding: 0 14px;
-}
-
-footer:has(button:not([hidden])) {
+  justify-content: space-between;
+  gap: 12px;
   padding: 8px 14px;
 }
 
-.link {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.link:hover {
-  color: var(--ink);
-  text-decoration: underline;
+footer #all {
+  margin-left: auto;
 }

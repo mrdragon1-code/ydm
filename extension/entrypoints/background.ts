@@ -2,6 +2,7 @@ import type { Browser } from 'wxt/browser';
 import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
 import { pickLocale, setLocale, t } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
+import { bytes } from '@/lib/ui/format';
 import { fromUrl, sanitize } from '@/lib/naming';
 import {
   DEFAULT_SETTINGS,
@@ -174,9 +175,19 @@ export default defineBackground(() => {
     await setLocale(pickLocale(settings.language));
     await browser.contextMenus.removeAll();
     browser.contextMenus.create({ id: 'ydm', title: t('menu.link'), contexts: ['link'] });
+    browser.contextMenus.create({ id: 'ydm-page', title: t('menu.page'), contexts: ['page'] });
+  }
+
+  /** The downloads page, listing the links of `tab` to pick from. */
+  function openGrab(tabId: number) {
+    void browser.tabs.create({ url: browser.runtime.getURL(`/downloads.html#grab=${tabId}`) });
   }
 
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === 'ydm-page') {
+      if (tab?.id !== undefined && !tab.incognito) openGrab(tab.id);
+      return;
+    }
     const url = info.linkUrl;
     if (!url || !/^https?:/i.test(url)) return;
     await restored;
@@ -231,6 +242,7 @@ export default defineBackground(() => {
           connections: item.connectionsSent!,
           resume: item.checkpoint,
           limit: item.limitSent,
+          checksum: settings.checksum,
         });
       })();
     }
@@ -363,7 +375,11 @@ export default defineBackground(() => {
         item.state = 'saving';
         item.done = item.total ?? item.done;
         item.speed = 0;
+        if (settings.checksum) item.sha256 = 'pending';
         void save(item, event.blobUrl, event.name);
+        break;
+      case 'hashed':
+        item.sha256 = event.sha256;
         break;
       case 'failed':
         clearReferrer(item.id);
@@ -437,6 +453,7 @@ export default defineBackground(() => {
     const error = delta.error?.current;
     if (state === 'complete') {
       item.state = 'completed';
+      if (settings.notify) notifyDone(item);
     } else if (error === 'USER_CANCELED') {
       item.state = 'cancelled';
     } else {
@@ -448,6 +465,33 @@ export default defineBackground(() => {
     }
     update();
   });
+
+  // --- notifications ------------------------------------------------------
+
+  const NOTIFICATION = 'ydm-';
+
+  function notifyDone(item: Entry) {
+    const size = item.total ? bytes(item.total) : '';
+    const options: Browser.notifications.NotificationCreateOptions = {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('/icon/128.png'),
+      title: t('notify.done'),
+      message: size ? t('notify.doneBody', { name: item.name, size }) : item.name,
+    };
+    // Firefox has no notification buttons; a click there shows the file.
+    if (!import.meta.env.FIREFOX) options.buttons = [{ title: t('notify.show') }];
+    void browser.notifications.create(`${NOTIFICATION}${item.id}`, options).catch(() => {});
+  }
+
+  function showFromNotification(notificationId: string) {
+    if (!notificationId.startsWith(NOTIFICATION)) return;
+    const item = items.get(Number(notificationId.slice(NOTIFICATION.length)));
+    if (item?.downloadId !== undefined) browser.downloads.show(item.downloadId);
+    void browser.notifications.clear(notificationId);
+  }
+
+  browser.notifications.onClicked.addListener(showFromNotification);
+  browser.notifications.onButtonClicked?.addListener((id) => showFromNotification(id));
 
   function handBack(url: string) {
     handedBack.add(url);
@@ -530,13 +574,28 @@ export default defineBackground(() => {
       case 'clear':
         for (const [id, item] of items) if (!isActive(item) && item.state !== 'paused') items.delete(id);
         break;
+      case 'remove': {
+        const item = items.get(cmd.id);
+        if (!item || isActive(item)) return;
+        if (item.state === 'paused' || item.checkpoint) void link.send({ type: 'release', id: item.id });
+        items.delete(cmd.id);
+        notify(cmd.id);
+        schedulePersist();
+        return;
+      }
+      case 'urls':
+        // Chosen by hand: no minimum size, as for "Download with YDM".
+        for (const url of cmd.urls.filter((u) => /^https?:/i.test(u)).slice(0, 500)) {
+          enqueue(url, undefined, cmd.referrer);
+        }
+        return;
     }
     update();
   }
 
   /** The whole list (`changed` null), or only the items in `changed`. */
   function snapshot(changed: Set<number> | null): PopupState {
-    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url }: Entry): Item => ({
+    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url, sha256, downloadId }: Entry): Item => ({
       id,
       name,
       state,
@@ -547,6 +606,8 @@ export default defineBackground(() => {
       elapsed,
       parts,
       url,
+      sha256,
+      downloadId,
       resumable: checkpoint !== undefined,
     });
     const base = { enabled: settings.enabled, minSize: settings.minSize, settings };

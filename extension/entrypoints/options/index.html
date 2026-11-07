@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="manifest.open_in_tab" content="true" />
-    <title>Impostazioni di YDM</title>
+    <title>YDM</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
@@ -13,87 +13,86 @@
         <span class="mark">YDM</span>
         <span id="status" class="status" role="status"></span>
       </header>
-      <h1>Impostazioni</h1>
+      <h1 data-i18n="settings.heading"></h1>
 
       <section aria-labelledby="when">
-        <h2 id="when">Quando interviene</h2>
+        <h2 id="when" data-i18n="settings.when"></h2>
         <div class="row">
-          <label for="enabled">YDM attivo</label>
+          <label for="enabled" data-i18n="settings.enabled"></label>
           <input type="checkbox" id="enabled" class="switch" role="switch" />
-          <p class="help">Prende i download grandi al posto del browser. Spento, scarica tutto il browser come al solito.</p>
+          <p class="help" data-i18n="settings.enabledHelp"></p>
         </div>
         <div class="row">
-          <label for="minSize">Dimensione minima</label>
-          <select id="minSize">
-            <option value="1">1 MB</option>
-            <option value="5">5 MB</option>
-            <option value="10">10 MB</option>
-            <option value="25">25 MB</option>
-            <option value="50">50 MB</option>
-            <option value="100">100 MB</option>
-          </select>
-          <p class="help">I file più piccoli li scarica il browser: finiscono prima che più connessioni servano a qualcosa.</p>
+          <label for="minSize" data-i18n="settings.minSize"></label>
+          <select id="minSize"></select>
+          <p class="help" data-i18n="settings.minSizeHelp"></p>
         </div>
       </section>
 
       <section aria-labelledby="speed">
-        <h2 id="speed">Velocità</h2>
+        <h2 id="speed" data-i18n="settings.speed"></h2>
         <div class="row">
-          <label for="connections">Connessioni per download</label>
+          <label for="connections" data-i18n="settings.connections"></label>
           <output id="connectionsValue" for="connections" class="value"></output>
-          <input type="range" id="connections" min="1" max="8" step="1" />
+          <input type="range" id="connections" min="1" max="6" step="1" />
           <div id="preview" class="segbar preview" aria-hidden="true"></div>
-          <p class="help">Ogni connessione scarica un pezzo del file. Oltre 4 alcuni siti rallentano o bloccano chi ne apre troppe.</p>
+          <p class="help" data-i18n="settings.connectionsHelp"></p>
         </div>
         <div class="row">
-          <span class="label" id="parallelLabel">Download contemporanei</span>
+          <span class="label" id="parallelLabel" data-i18n="settings.parallel"></span>
           <div class="choices" role="radiogroup" aria-labelledby="parallelLabel" id="parallel"></div>
-          <p class="help">Gli altri aspettano in coda e partono appena uno finisce.</p>
+          <p class="help" data-i18n="settings.parallelHelp"></p>
         </div>
         <div class="row">
-          <label for="speedLimit">Limite di velocità</label>
-          <select id="speedLimit">
-            <option value="0">Nessuno</option>
-            <option value="1">1 MB/s</option>
-            <option value="2">2 MB/s</option>
-            <option value="5">5 MB/s</option>
-            <option value="10">10 MB/s</option>
-            <option value="25">25 MB/s</option>
-            <option value="50">50 MB/s</option>
-            <option value="100">100 MB/s</option>
-          </select>
-          <p class="help">Per lasciare banda al resto della casa mentre scarichi. Vale per tutti i download di YDM insieme, e cambia subito anche quelli in corso.</p>
+          <label for="speedLimit" data-i18n="settings.speedLimit"></label>
+          <select id="speedLimit"></select>
+          <p class="help" data-i18n="settings.speedLimitHelp"></p>
         </div>
       </section>
 
       <section aria-labelledby="safety">
-        <h2 id="safety">Sicurezza</h2>
+        <h2 id="safety" data-i18n="settings.safety"></h2>
         <div class="row">
-          <label for="programsToBrowser">Lascia al browser i programmi</label>
+          <label for="programsToBrowser" data-i18n="settings.programs"></label>
           <input type="checkbox" id="programsToBrowser" class="switch" role="switch" />
-          <p class="help">
-            File come .exe, .msi e .bat li scarica il browser, così Safe Browsing controlla anche il sito da cui
-            arrivano. Se lo spegni vanno veloci anche i programmi, ma il browser li vede arrivare da YDM e controlla
-            solo il file.
-          </p>
+          <p class="help" data-i18n="settings.programsHelp"></p>
+        </div>
+        <div class="row">
+          <label for="checksum" data-i18n="settings.checksum"></label>
+          <input type="checkbox" id="checksum" class="switch" role="switch" />
+          <p class="help" data-i18n="settings.checksumHelp"></p>
+        </div>
+      </section>
+
+      <section aria-labelledby="general">
+        <h2 id="general" data-i18n="settings.general"></h2>
+        <div class="row">
+          <label for="language" data-i18n="settings.language"></label>
+          <select id="language"></select>
+          <p class="help" data-i18n="settings.languageHelp"></p>
+        </div>
+        <div class="row">
+          <label for="notify" data-i18n="settings.notify"></label>
+          <input type="checkbox" id="notify" class="switch" role="switch" />
+          <p class="help" data-i18n="settings.notifyHelp"></p>
         </div>
       </section>
 
       <section aria-labelledby="sites">
-        <h2 id="sites">Siti esclusi</h2>
-        <p class="help lead">Da questi siti, e dai loro sottodomini, scarica sempre il browser.</p>
+        <h2 id="sites" data-i18n="settings.sites"></h2>
+        <p class="help lead" data-i18n="settings.sitesHelp"></p>
         <form id="addSite" class="add" novalidate>
-          <label for="site" class="visually-hidden">Sito da escludere</label>
-          <input id="site" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="per esempio mega.nz" />
-          <button type="submit" class="button">Escludi</button>
+          <label for="site" class="visually-hidden" data-i18n="settings.siteLabel"></label>
+          <input id="site" type="text" inputmode="url" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.sitePlaceholder" />
+          <button type="submit" class="button" data-i18n="settings.siteAdd"></button>
         </form>
         <p id="siteError" class="error" role="alert"></p>
         <ul id="excluded" class="sites"></ul>
-        <p id="noSites" class="help">Nessun sito escluso.</p>
+        <p id="noSites" class="help" data-i18n="settings.noSites"></p>
       </section>
 
       <footer>
-        <button id="reset" class="link">Ripristina le impostazioni iniziali</button>
+        <button id="reset" class="link" type="button" data-i18n="settings.reset"></button>
       </footer>
     </main>
     <script type="module" src="./main.ts"></script>

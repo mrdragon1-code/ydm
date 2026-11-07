@@ -331,12 +331,12 @@ test('pause keeps what is on disk; resume fetches only the rest', async ({ conte
   const row = popup.locator('#list li').first();
   await expect(row).toHaveAttribute('data-state', 'running');
   await popup.waitForTimeout(3000);
-  await row.getByRole('button', { name: 'Pausa' }).click();
+  await row.getByRole('button', { name: 'Pause' }).click();
   await expect(row).toHaveAttribute('data-state', 'paused');
-  await expect(row.locator('.meta')).toContainText(/In pausa · \d+%/);
+  await expect(row.locator('.meta')).toContainText(/Paused · \d+%/);
   const before = log.length;
   await popup.waitForTimeout(1500);
-  await row.getByRole('button', { name: 'Riprendi' }).click();
+  await row.getByRole('button', { name: 'Resume' }).click();
   const d = await waitForCompleted(worker, fromYdm);
   expect(await sha256(d.filename)).toBe(server.sha256);
   const refetched = requestedBytes(log.slice(before));
@@ -353,9 +353,9 @@ test('a cancelled download can be tried again', async ({ context, worker, served
   const popup = await context.newPage();
   await popup.goto(`chrome-extension://${id}/popup.html`);
   const row = popup.locator('#list li').first();
-  await row.getByRole('button', { name: 'Annulla' }).click();
+  await row.getByRole('button', { name: 'Cancel' }).click();
   await expect(row).toHaveAttribute('data-state', 'cancelled');
-  await row.getByRole('button', { name: 'Riprova' }).click();
+  await row.getByRole('button', { name: 'Retry' }).click();
   const d = await waitForCompleted(worker, fromYdm);
   expect(await sha256(d.filename)).toBe(server.sha256);
   await expect(row).toHaveAttribute('data-state', 'completed');
@@ -421,23 +421,23 @@ test('the settings page saves what is changed', async ({ context, worker }) => {
   const id = new URL(worker.url()).host;
   const page = await context.newPage();
   await page.goto(`chrome-extension://${id}/options.html`);
-  await page.getByLabel('Lascia al browser i programmi').uncheck();
-  await page.getByLabel('Dimensione minima').selectOption('25');
+  await page.getByLabel('Leave programs to the browser').uncheck();
+  await page.getByLabel('Minimum size').selectOption('25');
   await page.getByRole('radio', { name: '5' }).click();
-  await page.getByLabel('Sito da escludere').fill('https://www.Example.com/file');
-  await page.getByRole('button', { name: 'Escludi' }).click();
-  await page.getByLabel('Sito da escludere').fill('not a site');
-  await page.getByRole('button', { name: 'Escludi' }).click();
-  await expect(page.getByRole('alert')).toContainText('Non è un indirizzo');
-  await expect(page.locator('#excluded li')).toHaveText(['example.comTogli']);
+  await page.getByLabel('Site to exclude').fill('https://www.Example.com/file');
+  await page.getByRole('button', { name: 'Exclude' }).click();
+  await page.getByLabel('Site to exclude').fill('not a site');
+  await page.getByRole('button', { name: 'Exclude' }).click();
+  await expect(page.getByRole('alert')).toContainText('not a site address');
+  await expect(page.locator('#excluded li')).toHaveText(['example.comRemove']);
 
   const stored = await worker.evaluate(() =>
     (globalThis as ExtensionGlobal).chrome.storage.local.get(['programsToBrowser', 'minSize', 'parallel', 'excluded']),
   );
   expect(stored).toEqual({ programsToBrowser: false, minSize: 25 * 2 ** 20, parallel: 5, excluded: ['example.com'] });
 
-  await page.getByRole('button', { name: 'Ripristina le impostazioni iniziali' }).click();
-  await expect(page.getByLabel('Lascia al browser i programmi')).toBeChecked();
+  await page.getByRole('button', { name: 'Restore default settings' }).click();
+  await expect(page.getByLabel('Leave programs to the browser')).toBeChecked();
   await expect(page.locator('#excluded li')).toHaveCount(0);
 });
 
@@ -456,7 +456,7 @@ test('the popup lists the download and its size', async ({ context, worker, serv
   await expect(row.locator('.name')).toHaveText('_img src=x onerror=alert(1)_.bin');
   await expect(popup.locator('img')).toHaveCount(0);
   // Size, time and average speed, to compare with the browser.
-  await expect(row.locator('.meta')).toHaveText(/^6\.0 MB · \d+ s · media [\d.]+ (KB|MB)\/s$/);
+  await expect(row.locator('.meta')).toHaveText(/^6\.0 MB · \d+ s · avg [\d.]+ (KB|MB)\/s$/);
   await expect(row).toHaveAttribute('data-state', 'completed');
   await expect(popup.locator('#enabled')).toBeChecked();
 });

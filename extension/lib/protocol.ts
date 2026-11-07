@@ -38,6 +38,10 @@ export interface Item {
   resumable?: boolean;
   /** Where it is downloaded from. */
   url?: string;
+  /** Of the finished file; `pending` while it is computed. */
+  sha256?: string;
+  /** Where the browser saved it, once known. */
+  downloadId?: number;
 }
 
 export type Part = [start: number, pos: number, end: number];
@@ -62,6 +66,8 @@ export type EngineCommand =
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
       limit: number;
+      /** Compute the finished file's SHA-256. */
+      checksum?: boolean;
     }
   /** `keep`: a pause, the partial file stays for a later resume. */
   | { type: 'cancel'; id: number; keep?: boolean }
@@ -82,6 +88,7 @@ export type EngineEvent =
   | { type: 'progress'; id: number; done: number; total: number | null; parts?: Part[] }
   | { type: 'checkpoint'; id: number; checkpoint: Checkpoint }
   | { type: 'ready'; id: number; name: string; blobUrl: string }
+  | { type: 'hashed'; id: number; sha256: string }
   | { type: 'failed'; id: number; reason: Reason; retryInBrowser: boolean }
   | { type: 'cancelled'; id: number };
 
@@ -133,4 +140,8 @@ export type PopupCommand =
   | { type: 'retry'; id: number }
   | { type: 'show'; id: number }
   | { type: 'enabled'; value: boolean }
-  | { type: 'clear' };
+  | { type: 'clear' }
+  /** Takes a finished, failed or cancelled one off the list. */
+  | { type: 'remove'; id: number }
+  /** Pasted links or links picked from a page; `referrer`: that page. */
+  | { type: 'urls'; urls: string[]; referrer?: string };
