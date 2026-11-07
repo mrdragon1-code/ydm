@@ -86,7 +86,7 @@ not run for files YDM saves; hence the "Leave programs to the browser" setting.
 ## Install
 
 - **Chrome, Edge, Brave**: from the Chrome Web Store / Edge Add-ons (links once published),
-  or from a [release](../../releases): unzip `ydm-*-chrome.zip`, open `chrome://extensions`,
+  or from a [release](https://github.com/mrdragon1-code/ydm/releases): unzip `ydm-*-chrome.zip`, open `chrome://extensions`,
   enable developer mode, *Load unpacked*.
 - **Firefox** (140 or later): from addons.mozilla.org (link once published).
 

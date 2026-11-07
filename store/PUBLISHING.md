@@ -29,18 +29,10 @@ Never paste keys or tokens into an issue, a commit or a chat: only into GitHub's
 
 ## 1. GitHub
 
-1. Create an empty public repository (no README, no license: they are here already).
-2. In this folder:
-   ```sh
-   git remote add origin https://github.com/<you>/ydm.git
-   git push -u origin main
-   ```
-3. Replace `<you>` with your user name where it appears: `extension/package.json`
-   (`homepage`, `repository`) and the support URL in the store listings below.
-4. Check that the *CI* workflow goes green.
+Done: the repository is https://github.com/mrdragon1-code/ydm.
 
-The privacy policy URL for the stores is then
-`https://github.com/<you>/ydm/blob/main/PRIVACY.md`.
+- Privacy policy URL for the stores: `https://github.com/mrdragon1-code/ydm/blob/main/PRIVACY.md`
+- Support / homepage URL: `https://github.com/mrdragon1-code/ydm`
 
 ## 2. Chrome Web Store
 

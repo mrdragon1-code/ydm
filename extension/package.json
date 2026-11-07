@@ -32,5 +32,13 @@
   "dependencies": {
     "@fontsource-variable/martian-mono": "5.3.0"
   },
-  "ydmRepo": ""
+  "ydmRepo": "mrdragon1-code/ydm",
+  "homepage": "https://github.com/mrdragon1-code/ydm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mrdragon1-code/ydm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mrdragon1-code/ydm/issues"
+  }
 }
