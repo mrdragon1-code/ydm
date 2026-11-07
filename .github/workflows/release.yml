@@ -183,11 +183,8 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          notes="$(printf '%s\n' \
-            "**Windows:** download \`YDM-Setup-$VERSION.exe\` and choose Firefox and/or Chrome." \
-            "" \
-            "**Firefox, by hand:** open \`ydm-$VERSION-firefox.xpi\` in Firefox and click *Add*. It updates itself." \
-            "" \
-            "**Chrome, Edge, Brave, by hand:** unzip \`ydm-$VERSION-chrome.zip\`, open \`chrome://extensions\`, turn on *Developer mode*, click *Load unpacked* and pick the folder. Chrome cannot update it by itself; YDM's popup says when a new version is out.")"
+          # The description of what YDM does and how to install it, with this
+          # version's file names; GitHub adds the list of changes after it.
+          sed "s/{version}/$VERSION/g" store/release-notes.md > notes.md
           gh release create "v$VERSION" extension/dist/* --target "$SHA" --title "YDM $VERSION" \
-            --notes "$notes" --generate-notes
+            --notes-file notes.md --generate-notes
