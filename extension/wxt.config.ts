@@ -10,13 +10,13 @@ const LOCALES = path.resolve(import.meta.dirname, 'locales');
 function manifestLocales() {
   const read = (file: string) => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {});
   const codes = new Set(['en']);
-  for (const dir of ['auto', 'overrides']) {
+  for (const dir of ['overrides']) {
     const full = path.join(LOCALES, dir);
     if (existsSync(full)) for (const f of readdirSync(full)) if (f.endsWith('.json')) codes.add(f.slice(0, -5));
   }
   const en = read(path.join(LOCALES, 'en.json'));
   return [...codes].map((code) => {
-    const layers = [read(path.join(LOCALES, 'overrides', `${code}.json`)), read(path.join(LOCALES, 'auto', `${code}.json`)), en];
+    const layers = [read(path.join(LOCALES, 'overrides', `${code}.json`)), en];
     const pick = (key: 'name' | 'description') => layers.map((l) => l.ext?.[key]).find(Boolean) as string;
     // Chrome caps the name at 75 characters and the description at 132.
     const messages = {

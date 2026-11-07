@@ -4,9 +4,13 @@
  * step with the settings. Shared by the popup and the downloads page.
  */
 
-import { pickLocale, setLocale, translatePage } from '../i18n';
-import type { Item, PopupCommand, PopupState } from '../protocol';
+import { pickLocale, setLocale, translatePage, useMachineTranslations } from '../i18n';
 import type { Settings } from '../policy';
+import type { Item, PopupCommand, PopupState } from '../protocol';
+import { cachedTranslation } from '../translate';
+import { offerTranslation } from './translate-offer';
+
+useMachineTranslations(cachedTranslation);
 
 export interface View {
   /** Newest first. */
@@ -22,6 +26,7 @@ export function connect(render: (view: View) => void): (cmd: PopupCommand) => vo
   const port = browser.runtime.connect({ name: 'popup' });
   let items: Item[] = [];
   let language: string | undefined;
+  let last: View | null = null;
   port.onMessage.addListener(async (raw) => {
     const msg = raw as PopupState;
     let changed: Set<number> | null = null;
@@ -38,11 +43,14 @@ export function connect(render: (view: View) => void): (cmd: PopupCommand) => vo
     }
     if (msg.settings.language !== language) {
       language = msg.settings.language;
-      await setLocale(pickLocale(language));
+      const lang = pickLocale(language);
+      await setLocale(lang);
       translatePage();
       changed = null;
+      void offerTranslation(lang, () => last && render({ ...last, changed: null }));
     }
-    render({ items, enabled: msg.enabled, minSize: msg.minSize, settings: msg.settings, changed });
+    last = { items, enabled: msg.enabled, minSize: msg.minSize, settings: msg.settings, changed };
+    render(last);
   });
   return (cmd) => port.postMessage(cmd);
 }

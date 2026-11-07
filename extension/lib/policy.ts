@@ -74,7 +74,7 @@ export function readSettings(stored: Record<string, unknown>): Settings {
       typeof stored.speedLimit === 'number' && stored.speedLimit >= 0 && stored.speedLimit <= LIMITS.speedLimitMb[1] * mb
         ? Math.floor(stored.speedLimit)
         : d.speedLimit,
-    language: typeof stored.language === 'string' && /^(auto|[a-z]{2,3}(_[A-Z]{2})?)$/.test(stored.language)
+    language: typeof stored.language === 'string' && /^(auto|[a-z]{2,3}([_-][A-Z][A-Za-z]{1,3})?)$/.test(stored.language)
       ? stored.language
       : d.language,
     notify: typeof stored.notify === 'boolean' ? stored.notify : d.notify,

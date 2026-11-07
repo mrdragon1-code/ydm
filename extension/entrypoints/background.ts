@@ -1,8 +1,13 @@
 import type { Browser } from 'wxt/browser';
 import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
-import { pickLocale, setLocale, t } from '@/lib/i18n';
+import { pickLocale, setLocale, t, useMachineTranslations } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
+import { cachedTranslation } from '@/lib/translate';
 import { bytes } from '@/lib/ui/format';
+
+// Translations made by a page with the browser's translator; the
+// background itself cannot use that API.
+useMachineTranslations(cachedTranslation);
 import { fromUrl, sanitize } from '@/lib/naming';
 import {
   DEFAULT_SETTINGS,
@@ -113,6 +118,8 @@ export default defineBackground(() => {
 
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    // A page just translated YDM: the menu and notifications follow.
+    if (changes.translated) void applyLanguage();
     if (!SETTING_KEYS.some((key) => changes[key])) return;
     const next: Record<string, unknown> = { ...settings };
     for (const key of SETTING_KEYS) if (changes[key]) next[key] = changes[key].newValue;

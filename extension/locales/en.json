@@ -176,5 +176,12 @@
     "failed": "Download failed",
     "show": "Show in folder",
     "open": "Open"
+  },
+  "translate": {
+    "offer": "Show YDM in {language}? Your browser translates it on this device.",
+    "button": "Translate",
+    "progress": "Translating… {pct}",
+    "failed": "The browser could not translate YDM. It stays in English.",
+    "machine": "translated by the browser"
   }
 }

@@ -99,6 +99,44 @@ test('English by default; Italian when chosen, everywhere at once', async ({ con
   });
 });
 
+test("other languages are translated by the browser's translator, once, and kept", async ({ context, worker, id }) => {
+  // Headless Chromium has no translation models: a stand-in Translator
+  // that "translates" into German by prefixing, keeping the tokens.
+  await context.addInitScript(() => {
+    const w = globalThis as unknown as Record<string, unknown>;
+    w.translateCalls = 0;
+    w.Translator = {
+      availability: async () => 'downloadable',
+      create: async ({ targetLanguage }: { targetLanguage: string }) => ({
+        translate: async (s: string) => {
+          (w.translateCalls as number)++;
+          return `[${targetLanguage}] ${s}`;
+        },
+        destroy() {},
+      }),
+    };
+  });
+  await worker.evaluate(() => (globalThis as Ext).chrome.storage.local.set({ language: 'de' }));
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  // English until asked; the offer names the language in itself.
+  await expect(popup.locator('#empty')).toContainText('No downloads yet.');
+  await expect(popup.locator('.translate-offer')).toContainText('Deutsch');
+  await popup.getByRole('button', { name: 'Translate' }).click();
+  await expect(popup.locator('#empty')).toContainText('[de] No downloads yet.');
+  await expect(popup.locator('.translate-offer')).toHaveCount(0);
+  // Placeholders survived: the hint shows a real size, not "{size}".
+  // Numbers in German format, units untranslated.
+  await expect(popup.locator('#hint')).toContainText('[de] YDM takes over files of 5,0 MB or more');
+
+  // Another page uses the stored translation without translating again.
+  const settings = await context.newPage();
+  await settings.goto(`chrome-extension://${id}/options.html`);
+  await expect(settings.locator('h1')).toHaveText('[de] Settings');
+  expect(await settings.evaluate(() => (globalThis as unknown as { translateCalls: number }).translateCalls)).toBe(0);
+  await expect(settings.locator('.translate-offer')).toHaveCount(0);
+});
+
 test('pasted URLs are downloaded, and the downloads page shows the SHA-256', async ({
   context,
   worker,

@@ -1,6 +1,10 @@
-import { bcp47, LOCALES, pickLocale, setLocale, t, translatePage } from '@/lib/i18n';
+import { bcp47, LOCALES, MACHINE_LOCALES, pickLocale, setLocale, t, translatePage, useMachineTranslations } from '@/lib/i18n';
 import { DEFAULT_SETTINGS, LIMITS, normalizeHost, readSettings, SETTING_KEYS, type Settings } from '@/lib/policy';
+import { cachedTranslation } from '@/lib/translate';
 import { bytes, speed } from '@/lib/ui/format';
+import { offerTranslation } from '@/lib/ui/translate-offer';
+
+useMachineTranslations(cachedTranslation);
 
 const MB = 1024 * 1024;
 const MIN_SIZES = [1, 5, 10, 25, 50, 100];
@@ -53,19 +57,32 @@ function fillChoices(s: Settings) {
       return code;
     }
   };
+  // Shipped languages, then those the browser can translate on the device.
+  const machine = 'Translator' in globalThis ? MACHINE_LOCALES.filter((c) => !LOCALES.some((l) => l.startsWith(c))) : [];
+  const suffix = ` · ${t('translate.machine')}`;
   language.replaceChildren(
     new Option(t('settings.languageAuto'), 'auto'),
-    ...LOCALES.map((code) => new Option(names(code), code)).sort((a, b) => a.text.localeCompare(b.text)),
+    ...[
+      ...LOCALES.map((code) => new Option(names(code), code)),
+      ...machine.map((code) => new Option(names(code) + suffix, code)),
+    ].sort((a, b) => a.text.localeCompare(b.text)),
   );
+  if (![...language.options].some((o) => o.value === s.language)) language.add(new Option(names(s.language), s.language));
 }
 
 async function render(s: Settings) {
   current = s;
   if (s.language !== shownLanguage) {
     shownLanguage = s.language;
-    await setLocale(pickLocale(s.language));
+    const lang = pickLocale(s.language);
+    await setLocale(lang);
     translatePage();
     document.title = t('settings.title');
+    void offerTranslation(lang, () => {
+      document.title = t('settings.title');
+      shownLanguage = null;
+      void load();
+    });
   }
   fillChoices(s);
   enabled.checked = s.enabled;

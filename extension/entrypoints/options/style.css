@@ -214,3 +214,9 @@ footer {
     font-size: 22px;
   }
 }
+
+/* Long names (languages, sizes) must not push the page wider. */
+.row > select {
+  max-width: min(60vw, 320px);
+  text-overflow: ellipsis;
+}

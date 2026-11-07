@@ -325,3 +325,15 @@ select {
     background-position: 200% 0;
   }
 }
+
+/* Offer to translate YDM with the browser's translator. */
+.translate-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--hover);
+  font-size: 12px;
+}

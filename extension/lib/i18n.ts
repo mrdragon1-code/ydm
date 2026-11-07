@@ -1,9 +1,9 @@
 /**
- * Translations. English (`locales/en.json`) is the source; every other
- * language is a machine translation (`locales/auto/<lang>.json`, written by
- * `npm run translate`) with human corrections on top
- * (`locales/overrides/<lang>.json`). A key missing anywhere falls back to
- * English, so a half-translated language never shows a blank.
+ * Translations. English (`locales/en.json`) is the source. Languages
+ * translated by people ship with YDM (`locales/overrides/<lang>.json`).
+ * Any other language is translated on the device by the browser's own
+ * translator (lib/translate.ts) and kept in storage. A key missing
+ * anywhere falls back to English, so a language never shows a blank.
  *
  * The language follows the browser's, unless the user picked one.
  */
@@ -21,15 +21,27 @@ export interface Text {
 export const SOURCE = 'en';
 
 // Lazy: a page only loads its own language.
-const AUTO = import.meta.glob<Messages>('../locales/auto/*.json', { import: 'default' });
 const OVERRIDES = import.meta.glob<Messages>('../locales/overrides/*.json', { import: 'default' });
 
 const codeOf = (path: string) => path.slice(path.lastIndexOf('/') + 1, -'.json'.length);
 
-/** Every language YDM has, in Chrome's `_locales` spelling (`pt_BR`). */
-export const LOCALES: string[] = [
-  ...new Set([SOURCE, ...Object.keys(AUTO).map(codeOf), ...Object.keys(OVERRIDES).map(codeOf)]),
-].sort();
+/** Languages translated by people, in Chrome's `_locales` spelling (`pt_BR`). */
+export const LOCALES: string[] = [...new Set([SOURCE, ...Object.keys(OVERRIDES).map(codeOf)])].sort();
+
+/** Languages the browser's translator can provide, offered in the settings
+ * when the API exists. BCP 47 base codes, as the Translator API wants. */
+export const MACHINE_LOCALES = [
+  'ar', 'bg', 'bn', 'cs', 'da', 'de', 'el', 'es', 'fi', 'fr', 'hi', 'hr', 'hu', 'id', 'it', 'iw', 'ja',
+  'kn', 'ko', 'lt', 'mr', 'nl', 'no', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'ta', 'te', 'th', 'tr',
+  'uk', 'vi', 'zh', 'zh-Hant',
+];
+
+/** Where machine translations come from; set by pages that can store them. */
+let machine: (code: string) => Promise<Messages | null> = async () => null;
+
+export function useMachineTranslations(load: (code: string) => Promise<Messages | null>) {
+  machine = load;
+}
 
 let locale = SOURCE;
 let layers: Messages[] = [en];
@@ -49,13 +61,28 @@ export function resolveLocale(wanted: string, available: string[] = LOCALES): st
   );
 }
 
-/** `setting` is 'auto' or a locale code. */
+/** `setting` is 'auto' or a locale code. Shipped languages are matched
+ * loosely (`it-CH` → `it`); any other is returned as the browser's base
+ * language, for the machine translation. */
 export function pickLocale(setting: string | undefined): string {
-  if (setting && setting !== 'auto' && LOCALES.includes(setting)) return setting;
-  return resolveLocale(uiLanguage());
+  if (setting && setting !== 'auto') return setting;
+  const ui = uiLanguage();
+  const shipped = resolveLocale(ui);
+  if (shipped !== SOURCE || ui.toLowerCase().startsWith(SOURCE)) return shipped;
+  return machineCode(ui);
 }
 
-function uiLanguage(): string {
+/** A browser language as the Translator API names it. */
+export function machineCode(ui: string): string {
+  const [base, region] = ui.replace('_', '-').split('-');
+  const lang = (base ?? SOURCE).toLowerCase();
+  if (lang === 'zh' && /^(tw|hk|mo|hant)$/i.test(region ?? '')) return 'zh-Hant';
+  if (lang === 'he') return 'iw';
+  if (lang === 'nb' || lang === 'nn') return 'no';
+  return lang;
+}
+
+export function uiLanguage(): string {
   try {
     return browser.i18n.getUILanguage();
   } catch {
@@ -67,11 +94,9 @@ function uiLanguage(): string {
 export async function setLocale(code: string): Promise<void> {
   const next: Messages[] = [en];
   if (code !== SOURCE) {
-    const [auto, override] = await Promise.all([
-      AUTO[`../locales/auto/${code}.json`]?.(),
-      OVERRIDES[`../locales/overrides/${code}.json`]?.(),
-    ]);
-    if (auto) next.unshift(auto);
+    const override = await OVERRIDES[`../locales/overrides/${code}.json`]?.();
+    const translated = override ? null : await machine(code).catch(() => null);
+    if (translated) next.unshift(translated);
     if (override) next.unshift(override);
   }
   locale = next.length > 1 ? code : SOURCE;

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import en from '../locales/en.json';
-import { flatten, type Messages, render, resolveLocale, setLocale, t } from './i18n';
+import { flatten, machineCode, type Messages, render, resolveLocale, setLocale, t } from './i18n';
 
 const LOCALES = path.resolve(import.meta.dirname, '../locales');
 
@@ -20,6 +20,17 @@ describe('resolveLocale', () => {
   ])('%s → %s', (wanted, expected) => {
     expect(resolveLocale(wanted, available)).toBe(expected);
   });
+});
+
+describe('machineCode', () => {
+  it.each([
+    ['de-DE', 'de'],
+    ['zh-CN', 'zh'],
+    ['zh-TW', 'zh-Hant'],
+    ['he', 'iw'],
+    ['nb-NO', 'no'],
+    ['pt_BR', 'pt'],
+  ])('%s → %s', (ui, expected) => expect(machineCode(ui)).toBe(expected));
 });
 
 describe('t', () => {
@@ -54,7 +65,7 @@ describe('t', () => {
  * name would silently disappear from the sentence. */
 describe('translations', () => {
   const source = flatten(en as Messages);
-  const files = ['auto', 'overrides'].flatMap((dir) => {
+  const files = ['overrides'].flatMap((dir) => {
     try {
       return readdirSync(path.join(LOCALES, dir))
         .filter((f) => f.endsWith('.json'))
