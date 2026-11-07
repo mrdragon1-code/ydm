@@ -1,4 +1,5 @@
 import type { Browser } from 'wxt/browser';
+import { pickLocale, setLocale, t } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
 import { fromUrl, sanitize } from '@/lib/naming';
 import {
@@ -10,7 +11,7 @@ import {
   type Settings,
   shouldIntercept,
 } from '@/lib/policy';
-import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState } from '@/lib/protocol';
+import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } from '@/lib/protocol';
 
 /** The engine page is closed after this long with nothing to do. */
 const IDLE_CLOSE_MS = 30_000;
@@ -37,7 +38,7 @@ interface Entry extends Item {
   /** Transfer time of earlier runs, before a restart. */
   elapsedBefore?: number;
   /** Being stopped in YDM to go to the browser, for this reason. */
-  toBrowser?: string;
+  toBrowser?: Reason;
   /** Being stopped by a pause: the partial file stays. */
   pausing?: boolean;
   /** Speed limit last sent to the engine. */
@@ -63,6 +64,7 @@ export default defineBackground(() => {
   const restored = (async () => {
     const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId']);
     settings = readSettings(stored);
+    await applyLanguage();
     nextId = (stored.nextId as number) ?? 0;
     const engineAlive = await link.alive();
     const resumed: number[] = [];
@@ -97,7 +99,9 @@ export default defineBackground(() => {
     if (!SETTING_KEYS.some((key) => changes[key])) return;
     const next: Record<string, unknown> = { ...settings };
     for (const key of SETTING_KEYS) if (changes[key]) next[key] = changes[key].newValue;
+    const languageChanged = next.language !== settings.language;
     settings = readSettings(next);
+    if (languageChanged) void applyLanguage();
     // More downloads at once may now start.
     void restored.then(() => {
       pump();
@@ -149,9 +153,12 @@ export default defineBackground(() => {
   // Wakes the service worker when the browser opens, to resume downloads.
   browser.runtime.onStartup.addListener(() => {});
 
-  browser.runtime.onInstalled.addListener(() => {
-    browser.contextMenus.create({ id: 'ydm', title: 'Scarica con YDM', contexts: ['link'] });
-  });
+  /** Loads the chosen language and labels the menu with it. */
+  async function applyLanguage() {
+    await setLocale(pickLocale(settings.language));
+    await browser.contextMenus.removeAll();
+    browser.contextMenus.create({ id: 'ydm', title: t('menu.link'), contexts: ['link'] });
+  }
 
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
     const url = info.linkUrl;
@@ -269,7 +276,7 @@ export default defineBackground(() => {
         item.checkpoint = undefined;
         // Only now is the real name known, e.g. for "Scarica con YDM".
         if (settings.programsToBrowser && isProgram(event.name)) {
-          item.toBrowser = 'è un programma: lo controlla il browser con Safe Browsing';
+          item.toBrowser = { key: 'reason.program' };
           void link.send({ type: 'cancel', id: item.id });
           break;
         }
@@ -357,7 +364,7 @@ export default defineBackground(() => {
         // Name rejected by the browser: retry with the one it picks.
       }
     }
-    item.reason = 'il browser non ha accettato il file';
+    item.reason = { key: 'reason.browserRejected' };
     handBack(item.url);
     item.state = 'browser';
     void link.send({ type: 'release', id: item.id });

@@ -57,7 +57,7 @@ export class Engine {
     worker.onerror = (e) => {
       e.preventDefault();
       this.stop(id);
-      this.emit({ type: 'failed', id, reason: e.message || 'engine error', retryInBrowser: true });
+      this.emit({ type: 'failed', id, reason: { key: 'reason.engine', params: { detail: e.message || 'worker' } }, retryInBrowser: true });
       void this.release(id);
     };
     worker.postMessage({ type: 'start', url, name, connections, file: fileName(id), resume, limit: job.limit });
@@ -78,7 +78,7 @@ export class Engine {
           this.jobs.set(id, { blobUrl });
           this.emit({ type: 'ready', id, name: msg.name, blobUrl });
         } catch (e) {
-          this.emit({ type: 'failed', id, reason: String(e), retryInBrowser: true });
+          this.emit({ type: 'failed', id, reason: { key: 'reason.engine', params: { detail: String(e) } }, retryInBrowser: true });
           await this.release(id);
         }
         return;

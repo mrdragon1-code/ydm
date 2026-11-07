@@ -4,8 +4,9 @@
  * Memory stays at one network chunk per connection whatever the file size.
  */
 
-import { isRetryableStatus, parseContentRange, validator } from './http';
+import { isRetryableStatus, parseContentRange, statusReason, validator } from './http';
 import { fromContentDisposition, fromUrl, sanitize } from './naming';
+import type { Params, Text } from './i18n';
 import type { Checkpoint, WorkerCommand, WorkerEvent } from './protocol';
 import { MIN_SPLIT, Segments } from './segments';
 
@@ -37,14 +38,20 @@ const scope = self as unknown as {
   onmessage: ((e: MessageEvent<WorkerCommand>) => void) | null;
 };
 
+/** `key` is a `reason.*` message, translated where it is shown. */
 class Fail extends Error {
   constructor(
-    message: string,
+    readonly key: string,
     readonly retryable: boolean,
     /** The browser's own downloader might succeed (it can send a Referer, …). */
     readonly retryInBrowser = true,
+    readonly params?: Params,
   ) {
-    super(message);
+    super(key);
+  }
+
+  get text(): Text {
+    return this.params ? { key: `reason.${this.key}`, params: this.params } : { key: `reason.${this.key}` };
   }
 }
 
@@ -111,7 +118,7 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
     result =
       fail === CANCELLED
         ? { type: 'cancelled' }
-        : { type: 'failed', reason: fail.message, retryInBrowser: fail.retryInBrowser };
+        : { type: 'failed', reason: fail.text, retryInBrowser: fail.retryInBrowser };
   } finally {
     clearInterval(ticker);
     dropOpening();
@@ -182,7 +189,7 @@ async function segmented(
     try {
       handle.truncate(total);
     } catch {
-      throw new Fail('spazio su disco insufficiente', false);
+      throw new Fail('noSpace', false);
     }
     n = total < SEGMENT_THRESHOLD ? 1 : Math.min(connections, Math.floor(total / MIN_SPLIT));
     segs = new Segments(total, n);
@@ -217,7 +224,7 @@ async function segmented(
     // Paused: record exactly what is on disk, so a resume redoes nothing.
     if (abort.signal.reason === CANCELLED) checkpoint();
   }
-  if (!segs.complete()) throw new Fail('download incompleto', false);
+  if (!segs.complete()) throw new Fail('incomplete', false);
   return total;
 }
 
@@ -254,7 +261,7 @@ async function fetchSegment(
     if (!fail) {
       if (progressed) continue;
       // A 206 with an empty body would otherwise loop forever.
-      fail = new Fail('connessione bloccata', true);
+      fail = new Fail('stalled', true);
     }
     if (!fail.retryable || attempt >= MAX_RETRIES) throw fail;
     if (attempt + 1 >= RETIRE_AFTER && segs.retire(id)) return false;
@@ -279,23 +286,23 @@ async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe
   if (res.status !== 206) {
     void res.body?.cancel();
     // 200: If-Range failed, the server is now sending a different file.
-    if (res.status === 200) throw new Fail('il file è cambiato sul server durante il download', false);
+    if (res.status === 200) throw new Fail('changed', false);
     throw statusFail(res.status);
   }
   const range = parseContentRange(res.headers.get('content-range'));
   if (range?.first !== seg.pos) {
     void res.body?.cancel();
-    throw new Fail('il server ha mandato una parte sbagliata del file', true);
+    throw new Fail('wrongPart', true);
   }
   if (range.total !== null && range.total !== probe.total) {
     void res.body?.cancel();
-    throw new Fail('il file è cambiato sul server durante il download', false);
+    throw new Fail('changed', false);
   }
   const encoding = res.headers.get('content-encoding');
   if (encoding && encoding !== 'identity') {
     // Decompressed bytes would not line up with the byte offsets.
     void res.body?.cancel();
-    throw new Fail('il server comprime i pezzi del file', false);
+    throw new Fail('compressed', false);
   }
   await pump(res, handle, segs, id);
 }
@@ -317,7 +324,7 @@ async function single(handle: SyncAccessHandle, probe: Probe): Promise<number> {
       const written = segs.written();
       const decoded = (res.headers.get('content-encoding') ?? 'identity') !== 'identity';
       if (probe.total !== null && written !== probe.total && !decoded) {
-        throw new Fail('connessione chiusa prima della fine', true);
+        throw new Fail('closedEarly', true);
       }
       handle.truncate(written);
       return written;
@@ -357,9 +364,9 @@ function write(handle: SyncAccessHandle, data: Uint8Array, at: number) {
     try {
       n = handle.write(data.subarray(off), { at: at + off });
     } catch (e) {
-      throw new Fail(`impossibile scrivere su disco (${(e as Error).message})`, false);
+      throw new Fail('diskWrite', false, true, { detail: (e as Error).message });
     }
-    if (n <= 0) throw new Fail('impossibile scrivere su disco', false);
+    if (n <= 0) throw new Fail('diskWrite', false, true, { detail: 'write returned 0' });
     off += n;
   }
 }
@@ -382,34 +389,25 @@ function request(url: string, headers: Record<string, string>): Promise<Response
 async function ensureSpace(bytes: number) {
   const { quota, usage = 0 } = await navigator.storage.estimate();
   if (quota !== undefined && quota - usage < bytes) {
-    throw new Fail(`spazio su disco insufficiente (servono ${(bytes / 2 ** 30).toFixed(1)} GB)`, false);
+    throw new Fail('noSpaceNeed', false, true, { gb: (bytes / 2 ** 30).toFixed(1) });
   }
 }
 
 function statusFail(status: number): Fail {
-  return new Fail(`${describeStatus(status)} (${status})`, isRetryableStatus(status));
-}
-
-/** What a status means for someone who is not a developer. */
-function describeStatus(status: number): string {
-  if (status === 401 || status === 403) return 'il sito non accetta download esterni';
-  if (status === 404 || status === 410) return 'file non trovato o link scaduto';
-  if (status === 429) return 'il sito limita le richieste';
-  if (status >= 500) return 'errore del sito';
-  return 'risposta inattesa del sito';
+  return new Fail(statusReason(status), isRetryableStatus(status), true, { status });
 }
 
 function asFail(e: unknown): Fail {
   if (e instanceof Fail) return e;
   // fetch rejects with a TypeError on network failures.
-  if (e instanceof TypeError) return new Fail('connessione al sito non riuscita', true);
-  return new Fail(e instanceof Error ? e.message : String(e), true);
+  if (e instanceof TypeError) return new Fail('network', true);
+  return new Fail('engine', true, true, { detail: e instanceof Error ? e.message : String(e) });
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Fail('connessione bloccata', true)), ms);
+    timer = setTimeout(() => reject(new Fail('stalled', true)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }

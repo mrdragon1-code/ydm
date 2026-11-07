@@ -1,5 +1,11 @@
 /** Messages between the background, the engine page and the popup. */
 
+import type { Text } from './i18n';
+
+/** A reason shown to the user: a message key, translated by the page that
+ * shows it. Plain strings are reasons saved by YDM 0.2, in Italian. */
+export type Reason = Text | string;
+
 export type State =
   | 'queued'
   | 'running'
@@ -22,7 +28,7 @@ export interface Item {
   /** Bytes per second, smoothed. */
   speed: number;
   /** Why it failed or went back to the browser. */
-  reason?: string;
+  reason?: Reason;
   /** Transfer time in milliseconds, once the file is complete. */
   elapsed?: number;
   /** While running: each connection's range as `[start, pos, end]`. */
@@ -69,7 +75,7 @@ export type EngineEvent =
   | { type: 'progress'; id: number; done: number; total: number | null; parts?: Part[] }
   | { type: 'checkpoint'; id: number; checkpoint: Checkpoint }
   | { type: 'ready'; id: number; name: string; blobUrl: string }
-  | { type: 'failed'; id: number; reason: string; retryInBrowser: boolean }
+  | { type: 'failed'; id: number; reason: Reason; retryInBrowser: boolean }
   | { type: 'cancelled'; id: number };
 
 /** Engine page → download worker. */
@@ -94,7 +100,7 @@ export type WorkerEvent =
   /** Everything outside `missing` has been flushed to disk. */
   | { type: 'checkpoint'; checkpoint: Checkpoint }
   | { type: 'done'; name: string; size: number }
-  | { type: 'failed'; reason: string; retryInBrowser: boolean }
+  | { type: 'failed'; reason: Reason; retryInBrowser: boolean }
   | { type: 'cancelled' };
 
 /** Background → popup. */

@@ -1,3 +1,4 @@
+import { render as text } from '@/lib/i18n';
 import type { Item, Part, PopupCommand, PopupState, State } from '@/lib/protocol';
 
 type Action = 'pause' | 'resume' | 'cancel' | 'retry' | 'show';
@@ -199,11 +200,11 @@ function describe(item: Item): string {
       return `${bytes(item.total)} · ${duration(seconds)} · media ${bytes(item.total / seconds)}/s`;
     }
     case 'failed':
-      return item.reason ? `Non riuscito: ${item.reason}` : 'Non riuscito';
+      return item.reason ? `Non riuscito: ${text(item.reason)}` : 'Non riuscito';
     case 'cancelled':
       return 'Annullato';
     case 'browser':
-      return item.reason ? `Scaricato dal browser: ${item.reason}` : 'Scaricato dal browser';
+      return item.reason ? `Scaricato dal browser: ${text(item.reason)}` : 'Scaricato dal browser';
   }
 }
 

@@ -190,7 +190,7 @@ test('when YDM is refused, the download goes back to the browser and is not lost
   expect(await sha256(d.filename)).toBe(server.sha256);
   // The popup says why: the site refused YDM.
   expect(await ydmItems(worker)).toEqual([
-    expect.objectContaining({ state: 'browser', reason: 'il sito non accetta download esterni (403)' }),
+    expect.objectContaining({ state: 'browser', reason: { key: 'reason.forbidden', params: { status: 403 } } }),
   ]);
 });
 
@@ -261,7 +261,7 @@ test('programs go to the browser unless that setting is off', async ({ context, 
   const d = await waitForCompleted(worker, fromBrowser);
   expect(await sha256(d.filename)).toBe(server.sha256);
   expect(await ydmItems(worker)).toEqual([
-    expect.objectContaining({ state: 'browser', reason: 'è un programma: lo controlla il browser con Safe Browsing' }),
+    expect.objectContaining({ state: 'browser', reason: { key: 'reason.program' } }),
   ]);
 
   await setLocal(worker, { programsToBrowser: false });

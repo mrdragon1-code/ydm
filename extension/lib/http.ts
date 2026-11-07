@@ -20,3 +20,13 @@ export function validator(headers: Headers): string | null {
 export function isRetryableStatus(status: number): boolean {
   return status >= 500 || status === 429 || status === 408;
 }
+
+/** The `reason.*` message for a status, in words for someone who is not a
+ * developer. */
+export function statusReason(status: number): string {
+  if (status === 401 || status === 403) return 'forbidden';
+  if (status === 404 || status === 410) return 'notFound';
+  if (status === 429) return 'tooMany';
+  if (status >= 500) return 'serverError';
+  return 'unexpected';
+}

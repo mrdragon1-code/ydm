@@ -1,12 +1,15 @@
 /** Which browser downloads YDM takes over, and the settings behind it.
  * Everything else is left alone. */
 
+import type { Text } from './i18n';
+
 export interface Settings {
   enabled: boolean;
   /** Below this, parallel connections gain nothing. */
   minSize: number;
-  /** Parallel connections per download. Public mirrors answered 429 or
-   * blocked the client beyond about four. */
+  /** Most parallel connections per download. YDM starts with fewer and
+   * adds more while the speed keeps rising. Browsers open at most six
+   * HTTP/1.1 connections per host, shared by all downloads from it. */
   connections: number;
   /** Downloads running at once; the rest wait. */
   parallel: number;
@@ -17,6 +20,12 @@ export interface Settings {
   excluded: string[];
   /** Bytes per second for all downloads together, 0 for no limit. */
   speedLimit: number;
+  /** 'auto' (the browser's language) or a locale code such as 'pt_BR'. */
+  language: string;
+  /** A system notification when a download finishes. */
+  notify: boolean;
+  /** SHA-256 of every finished file, shown in the downloads page. */
+  checksum: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,13 +36,16 @@ export const DEFAULT_SETTINGS: Settings = {
   programsToBrowser: true,
   excluded: [],
   speedLimit: 0,
+  language: 'auto',
+  notify: true,
+  checksum: true,
 };
 
 export const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
 
 export const LIMITS = {
   minSizeMb: [1, 1000],
-  connections: [1, 8],
+  connections: [1, 6],
   parallel: [1, 6],
   speedLimitMb: [0, 1000],
 } as const;
@@ -62,6 +74,11 @@ export function readSettings(stored: Record<string, unknown>): Settings {
       typeof stored.speedLimit === 'number' && stored.speedLimit >= 0 && stored.speedLimit <= LIMITS.speedLimitMb[1] * mb
         ? Math.floor(stored.speedLimit)
         : d.speedLimit,
+    language: typeof stored.language === 'string' && /^(auto|[a-z]{2,3}(_[A-Z]{2})?)$/.test(stored.language)
+      ? stored.language
+      : d.language,
+    notify: typeof stored.notify === 'boolean' ? stored.notify : d.notify,
+    checksum: typeof stored.checksum === 'boolean' ? stored.checksum : d.checksum,
   };
 }
 
@@ -153,18 +170,20 @@ export function normalizeHost(input: string): string | null {
 }
 
 const SAVE_ERRORS: Record<string, string> = {
-  FILE_VIRUS_INFECTED: "l'antivirus ha bloccato il file",
-  FILE_BLOCKED: 'bloccato dai controlli di sicurezza',
-  FILE_SECURITY_CHECK_FAILED: 'bloccato dai controlli di sicurezza',
+  FILE_VIRUS_INFECTED: 'saveVirus',
+  FILE_BLOCKED: 'saveBlocked',
+  FILE_SECURITY_CHECK_FAILED: 'saveBlocked',
   // Firefox reports anything but a network or disk failure as CRASH,
   // including its own security checks blocking the file.
-  CRASH: 'fermato dal browser, di solito da un controllo di sicurezza',
-  FILE_NO_SPACE: 'spazio su disco insufficiente',
-  FILE_TOO_LARGE: 'file troppo grande per il disco',
-  FILE_ACCESS_DENIED: 'cartella Download non accessibile',
+  CRASH: 'saveCrash',
+  FILE_NO_SPACE: 'saveNoSpace',
+  FILE_TOO_LARGE: 'saveTooLarge',
+  FILE_ACCESS_DENIED: 'saveAccessDenied',
 };
 
-/** Why the browser did not save a file YDM finished, in words for the popup. */
-export function describeSaveError(error: string | undefined): string {
-  return (error && SAVE_ERRORS[error]) || `salvataggio non riuscito${error ? ` (${error})` : ''}`;
+/** Why the browser did not save a file YDM finished, as a message. */
+export function describeSaveError(error: string | undefined): Text {
+  const known = error && SAVE_ERRORS[error];
+  if (known) return { key: `reason.${known}` };
+  return error ? { key: 'reason.saveFailed', params: { error } } : { key: 'reason.saveFailedPlain' };
 }

@@ -85,12 +85,12 @@ describe('readSettings', () => {
 
 describe('describeSaveError', () => {
   it('explains blocked files in words', () => {
-    expect(describeSaveError('CRASH')).toBe('fermato dal browser, di solito da un controllo di sicurezza');
-    expect(describeSaveError('FILE_VIRUS_INFECTED')).toBe("l'antivirus ha bloccato il file");
+    expect(describeSaveError('CRASH')).toEqual({ key: 'reason.saveCrash' });
+    expect(describeSaveError('FILE_VIRUS_INFECTED')).toEqual({ key: 'reason.saveVirus' });
   });
 
   it('keeps unknown codes visible', () => {
-    expect(describeSaveError('FILE_NAME_TOO_LONG')).toBe('salvataggio non riuscito (FILE_NAME_TOO_LONG)');
-    expect(describeSaveError(undefined)).toBe('salvataggio non riuscito');
+    expect(describeSaveError('FILE_NAME_TOO_LONG')).toEqual({ key: 'reason.saveFailed', params: { error: 'FILE_NAME_TOO_LONG' } });
+    expect(describeSaveError(undefined)).toEqual({ key: 'reason.saveFailedPlain' });
   });
 });
