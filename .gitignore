@@ -22,3 +22,6 @@ node_modules/
 .env.*
 /extension/.translate-models/
 /extension/.selfhosted/
+
+# Installer build inputs
+/installer/payload/

@@ -85,10 +85,18 @@ not run for files YDM saves; hence the "Leave programs to the browser" setting.
 
 ## Install
 
-- **Chrome, Edge, Brave**: from the Chrome Web Store / Edge Add-ons (links once published),
-  or from a [release](https://github.com/mrdragon1-code/ydm/releases): unzip `ydm-*-chrome.zip`, open `chrome://extensions`,
-  enable developer mode, *Load unpacked*.
-- **Firefox** (140 or later): from addons.mozilla.org (link once published).
+YDM is distributed from [GitHub releases](https://github.com/mrdragon1-code/ydm/releases/latest) only.
+
+- **Windows**: download `YDM-Setup-<version>.exe` and choose Firefox and/or Chrome. No
+  administrator rights needed; uninstall from *Settings → Apps*.
+- **Firefox** (140 or later), by hand: open `ydm-<version>-firefox.xpi` in Firefox and click
+  *Add*. The add-on is signed by Mozilla and **updates itself** from this repository.
+- **Chrome, Edge, Brave**, by hand: unzip `ydm-<version>-chrome.zip`, open
+  `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and choose the folder.
+
+Chrome on Windows only accepts extensions from its own store or loaded by hand, so no
+installer can add YDM to Chrome by itself, and Chrome cannot update an unpacked copy: when a
+new version is out, YDM's popup says so with a link.
 
 ## Development (`extension/`)
 
@@ -101,7 +109,7 @@ npm run e2e            # build + tests in a real Chromium (Playwright)
 npm run e2e:firefox    # build + tests in a real Firefox (web-ext): download, resume after restart
 npm run check          # type check
 npm run build          # .output/chrome-mv3   ·   npm run build:firefox
-node scripts/screenshots.mjs   # store screenshots from real downloads
+node scripts/screenshots.mjs   # screenshots from real downloads
 ```
 
 The end-to-end tests use the Rust test server in `engine/crates/ydm-testserver`
@@ -113,11 +121,14 @@ page would be stopped in the middle of a download.
 
 ## Releasing
 
-Raise `version` in `extension/package.json` and push to `main`. When CI passes, the *Release*
-workflow tags the commit, attaches the zips to a GitHub release and submits them to every
-store whose secrets are set; installed copies then update themselves (see
-[store/PUBLISHING.md](store/PUBLISHING.md)). Dependabot keeps dependencies current; minor
-updates merge themselves when CI passes.
+Raise `version` in `extension/package.json` and merge to `main`. When CI passes, the
+*Release* workflow tags the commit and publishes a GitHub release with the Windows installer,
+the Mozilla-signed Firefox add-on, the Chrome folder and the sources (see
+[store/PUBLISHING.md](store/PUBLISHING.md)). Firefox copies then update themselves.
+Dependabot keeps dependencies current; minor updates merge themselves when CI passes.
+
+The installer is built with [Inno Setup](https://jrsoftware.org/isinfo.php) from
+`installer/ydm.iss`.
 
 ## License
 
