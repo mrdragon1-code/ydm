@@ -42,7 +42,7 @@ jobs:
     env:
       YDM_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The commit CI tested, not whatever main is now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -60,7 +60,7 @@ jobs:
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
         with:
           node-version: 22
