@@ -18,7 +18,6 @@
     "e2e": "npm run build:e2e && playwright test",
     "e2e:firefox": "npm run build:firefox && node e2e/firefox.mjs && node e2e/firefox-resume.mjs",
     "screenshots": "node scripts/screenshots.mjs && node scripts/screenshots.mjs --lang it",
-    "promo": "node scripts/promo.mjs",
     "build:e2e": "node -e \"process.env.YDM_REPO=process.env.YDM_REPO||'ydm-test/ydm';require('child_process').execSync('npx wxt build',{stdio:'inherit',env:process.env})\""
   },
   "devDependencies": {

@@ -47,4 +47,20 @@ qualche secondo in più.
 | Chromium | 12,2 s | 3,4 s |
 | Firefox | 12,7 s | 3,1 s |
 
+## Installazione
+
+YDM si scarica solo dalle [release di GitHub](https://github.com/mrdragon1-code/ydm/releases/latest).
+
+- **Windows**: scarica `YDM-Setup-<versione>.exe` e scegli Firefox e/o Chrome. Non servono
+  permessi di amministratore; si disinstalla da *Impostazioni → App*.
+- **Firefox** (140 o successivo), a mano: apri `ydm-<versione>-firefox.xpi` in Firefox e clicca
+  *Aggiungi*. È firmato da Mozilla e **si aggiorna da solo** da questo repository.
+- **Chrome, Edge, Brave**, a mano: estrai `ydm-<versione>-chrome.zip`, apri
+  `chrome://extensions`, attiva *Modalità sviluppatore*, clicca *Carica estensione non
+  pacchettizzata* e scegli la cartella.
+
+Chrome su Windows accetta solo estensioni dal suo negozio o caricate a mano: nessun installer
+può aggiungere YDM a Chrome da solo, e Chrome non aggiorna una copia caricata a mano. Quando
+esce una nuova versione, il popup di YDM lo segnala con un link.
+
 Sviluppo, test e pubblicazione: vedi il [README in inglese](README.md#development-extension).

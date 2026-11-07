@@ -1,29 +1,27 @@
 name: Release
 
-# Fully automatic: raise "version" in extension/package.json and push to
-# main. When CI has passed, this workflow tags the commit, builds the zips,
-# publishes a GitHub release and submits to every store whose credentials
-# are set as repository secrets. A store without secrets is skipped with a
-# notice, so the GitHub release always happens.
+# Fully automatic: raise "version" in extension/package.json and merge to
+# main. When CI has passed, this workflow tags the commit and publishes a
+# GitHub release with:
 #
-# Firefox goes one of two ways (AMO refuses the same version twice), chosen
-# by the repository variable FIREFOX_DISTRIBUTION:
-#   amo (default)  submitted to addons.mozilla.org; AMO updates every copy
-#                  with the ID ydm@yamantau, including ones signed earlier.
-#   github         signed unlisted with an update_url pointing at this
-#                  repository's latest release; updates.json is published
-#                  with each release and Firefox updates itself from it.
+#   YDM-Setup-<v>.exe        Windows installer: pick Firefox and/or Chrome
+#   ydm-<v>-firefox.xpi      Firefox add-on signed by Mozilla; installs and
+#                            updates itself from this repository
+#   ydm-<v>-chrome.zip       Chrome/Edge/Brave, to load unpacked
+#   ydm-<v>-sources.zip      the sources Mozilla reviews
+#   updates.json             what Firefox checks for updates
+#
+# YDM is distributed from GitHub only, not from the browsers' stores.
+# Signing the Firefox add-on needs the secrets FIREFOX_JWT_ISSUER and
+# FIREFOX_JWT_SECRET (free API keys of an addons.mozilla.org account);
+# without them the release has no Firefox add-on and the installer offers
+# Chrome only.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Check the store credentials without submitting'
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -33,7 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     defaults:
@@ -41,6 +39,10 @@ jobs:
         working-directory: extension
     env:
       YDM_REPO: ${{ github.repository }}
+    outputs:
+      new: ${{ steps.version.outputs.new }}
+      version: ${{ steps.version.outputs.version }}
+      signed: ${{ steps.firefox.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,102 +63,131 @@ jobs:
           fi
 
       - uses: actions/setup-node@v4
-        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+        if: steps.version.outputs.new == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: extension/package-lock.json
 
-      - if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+      - if: steps.version.outputs.new == 'true'
         run: npm ci
 
-      - name: Zip for Chrome, Edge and Firefox
-        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Chrome build and sources
+        if: steps.version.outputs.new == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           npx wxt zip
           npx wxt zip -b firefox
-          ls -l .output/*.zip
+          mkdir -p dist
+          cp ".output/ydm-extension-$VERSION-chrome.zip" "dist/ydm-$VERSION-chrome.zip"
+          cp ".output/ydm-extension-$VERSION-sources.zip" "dist/ydm-$VERSION-sources.zip"
 
-      - name: Firefox build for GitHub, signed, with self-updates
-        id: selfhosted
-        if: steps.version.outputs.new == 'true' && github.event_name != 'workflow_dispatch' && vars.FIREFOX_DISTRIBUTION == 'github'
+      - name: Firefox add-on, signed, updating itself from GitHub
+        id: firefox
+        if: steps.version.outputs.new == 'true'
         env:
           WEB_EXT_API_KEY: ${{ secrets.FIREFOX_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           if [ -z "$WEB_EXT_API_KEY" ] || [ -z "$WEB_EXT_API_SECRET" ]; then
-            echo "::notice::Firefox self-updating build skipped: AMO keys not set"
+            echo "::warning::No Firefox add-on in this release: set the FIREFOX_JWT_ISSUER and FIREFOX_JWT_SECRET secrets"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           YDM_SELF_HOSTED=1 npx wxt build -b firefox
+          npx web-ext lint --self-hosted --source-dir .selfhosted/firefox-mv2 --warnings-as-errors
           npx web-ext sign --channel unlisted --source-dir .selfhosted/firefox-mv2 \
-            --artifacts-dir .selfhosted/signed --upload-source-code ".output/ydm-extension-$VERSION-sources.zip"
-          xpi=$(ls .selfhosted/signed/*.xpi | head -1)
-          cp "$xpi" ".output/ydm-$VERSION-firefox.xpi"
+            --artifacts-dir .selfhosted/signed --upload-source-code "dist/ydm-$VERSION-sources.zip"
+          cp "$(ls .selfhosted/signed/*.xpi | head -1)" "dist/ydm-$VERSION-firefox.xpi"
           node -e '
             const v = process.env.VERSION, repo = process.env.YDM_REPO;
             const crypto = require("crypto"), fs = require("fs");
-            const file = `.output/ydm-${v}-firefox.xpi`;
+            const file = `dist/ydm-${v}-firefox.xpi`;
             const hash = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
             const updates = { addons: { "ydm@yamantau": { updates: [{
               version: v,
               update_link: `https://github.com/${repo}/releases/download/v${v}/ydm-${v}-firefox.xpi`,
               update_hash: `sha256:${hash}`,
             }] } } };
-            fs.writeFileSync(".output/updates.json", JSON.stringify(updates, null, 2));
+            fs.writeFileSync("dist/updates.json", JSON.stringify(updates, null, 2));
           '
-          echo "assets=.output/ydm-$VERSION-firefox.xpi .output/updates.json" >> "$GITHUB_OUTPUT"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Payload for the installer
+        if: steps.version.outputs.new == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p payload
+          cp -r .output/chrome-mv3 payload/chrome
+          if [ -f "dist/ydm-$VERSION-firefox.xpi" ]; then cp "dist/ydm-$VERSION-firefox.xpi" payload/ydm-firefox.xpi; fi
+
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.new == 'true'
+        with:
+          name: release
+          path: |
+            extension/dist
+            extension/payload
+
+  installer:
+    needs: build
+    if: needs.build.outputs.new == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: extension
+
+      - name: Build YDM-Setup.exe
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          SIGNED: ${{ needs.build.outputs.signed }}
+          REPO: ${{ github.repository }}
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          $defs = @("/DVersion=$env:VERSION", "/DPayload=..\extension\payload", "/DRepo=$env:REPO")
+          if ($env:SIGNED -ne 'true') { $defs += '/DNoFirefox' }
+          & $iscc /Q @defs installer\ydm.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item "extension\.output\YDM-Setup-$env:VERSION.exe" extension\dist\
+
+      - name: Installer works, silently, both ways
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $dir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'YDM'
+          $p = Start-Process "extension\dist\YDM-Setup-$env:VERSION.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/BROWSERS=chrome' -PassThru
+          if (-not $p.WaitForExit(120000)) { throw 'installer hung' }
+          if ($p.ExitCode) { throw "installer exit $($p.ExitCode)" }
+          if (-not (Test-Path "$dir\chrome\manifest.json")) { throw 'Chrome files missing' }
+          $u = Start-Process (Get-ChildItem "$dir\unins*.exe")[0].FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -PassThru
+          if (-not $u.WaitForExit(120000)) { throw 'uninstaller hung' }
+          Start-Sleep 3
+          if (Test-Path "$dir\chrome") { throw 'uninstall left files' }
 
       - name: Tag and GitHub release
-        if: steps.version.outputs.new == 'true' && github.event_name != 'workflow_dispatch'
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          VERSION: ${{ needs.build.outputs.version }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
-          gh release create "v$VERSION" \
-            .output/*-chrome.zip .output/*-firefox.zip .output/*-sources.zip ${{ steps.selfhosted.outputs.assets }} \
-            --target "$SHA" --title "YDM $VERSION" --generate-notes
-
-      - name: Submit to the stores
-        if: steps.version.outputs.new == 'true' || github.event_name == 'workflow_dispatch'
-        env:
-          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
-          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
-          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
-          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
-          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
-          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
-          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
-          FIREFOX_DISTRIBUTION: ${{ vars.FIREFOX_DISTRIBUTION }}
-        run: |
-          args=()
-          if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_REFRESH_TOKEN" ]; then
-            args+=(--chrome-zip .output/*-chrome.zip)
-          else
-            echo "::notice::Chrome Web Store skipped: secrets not set"
-          fi
-          if [ "$FIREFOX_DISTRIBUTION" = "github" ]; then
-            echo "::notice::Firefox: distributed from GitHub (self-updating build above), not AMO"
-          elif [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
-            args+=(--firefox-zip .output/*-firefox.zip --firefox-sources-zip .output/*-sources.zip)
-          else
-            echo "::notice::Firefox Add-ons skipped: secrets not set"
-          fi
-          if [ -n "$EDGE_PRODUCT_ID" ] && [ -n "$EDGE_API_KEY" ]; then
-            args+=(--edge-zip .output/*-chrome.zip)
-          else
-            echo "::notice::Edge Add-ons skipped: secrets not set"
-          fi
-          if [ ${#args[@]} -eq 0 ]; then
-            echo "No store to submit to."
-            exit 0
-          fi
-          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
-          npx wxt submit "${args[@]}"
+          notes="$(printf '%s\n' \
+            "**Windows:** download \`YDM-Setup-$VERSION.exe\` and choose Firefox and/or Chrome." \
+            "" \
+            "**Firefox, by hand:** open \`ydm-$VERSION-firefox.xpi\` in Firefox and click *Add*. It updates itself." \
+            "" \
+            "**Chrome, Edge, Brave, by hand:** unzip \`ydm-$VERSION-chrome.zip\`, open \`chrome://extensions\`, turn on *Developer mode*, click *Load unpacked* and pick the folder. Chrome cannot update it by itself; YDM's popup says when a new version is out.")"
+          gh release create "v$VERSION" extension/dist/* --target "$SHA" --title "YDM $VERSION" \
+            --notes "$notes" --generate-notes
