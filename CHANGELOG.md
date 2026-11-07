@@ -1,8 +1,17 @@
 # Changelog
 
+## 1.0.1
+
+First public release, from GitHub.
+
+### Install
+- Windows installer `YDM-Setup.exe`: choose Firefox and/or Chrome, no administrator rights.
+- Firefox add-on signed by Mozilla, updating itself from GitHub.
+- Chrome, Edge, Brave: folder to load unpacked; the popup says when a new version is out.
+
 ## 1.0.0
 
-First public release.
+Not released (signed once before the GitHub releases existed).
 
 ### Faster
 - Adaptive connections: starts with four and adds more while the speed keeps rising, up to six.

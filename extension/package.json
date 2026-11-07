@@ -1,7 +1,7 @@
 {
   "name": "ydm-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "YDM: faster, safer downloads inside the browser.",
   "license": "MIT",
   "type": "module",
