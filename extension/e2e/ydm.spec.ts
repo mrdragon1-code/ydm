@@ -104,6 +104,14 @@ async function waitForCompleted(worker: Worker, match: (d: Download) => boolean)
   throw new Error('download did not complete');
 }
 
+/**
+ * KB/s per connection for tests that expect YDM to take a download over.
+ * Unthrottled, a fast machine can finish the browser's own download of a
+ * local file before YDM's handler runs; YDM then rightly keeps the
+ * browser's copy, and a test waiting for YDM's copy waits forever.
+ */
+const RACE_FREE = '4096';
+
 /** Opens a download URL in a tab, as a user clicking a link would. */
 async function start(context: BrowserContext, url: string) {
   const page = await context.newPage();
@@ -187,7 +195,7 @@ test('small files stay with the browser', async ({ context, worker, served }) =>
 });
 
 test('servers without range support still work, on one connection', async ({ context, worker, served }) => {
-  const server = await serve('--size', '8', '--no-ranges', '--filename', 'plain.bin');
+  const server = await serve('--size', '8', '--rate', RACE_FREE, '--no-ranges', '--filename', 'plain.bin');
   served.push(server);
   await start(context, server.url);
   const d = await waitForCompleted(worker, fromYdm);
@@ -199,7 +207,7 @@ test('sites that check the Referer (hotlink protection) still go through YDM', a
   worker,
   served,
 }) => {
-  const server = await serve('--size', '8', '--require-referer', 'http://127.0.0.1', '--filename', 'game.bin');
+  const server = await serve('--size', '8', '--rate', RACE_FREE, '--require-referer', 'http://127.0.0.1', '--filename', 'game.bin');
   served.push(server);
   const page = await context.newPage();
   await page.goto(`${new URL(server.url).origin}/page`);
@@ -281,7 +289,7 @@ test('closing the browser mid-download resumes where it stopped', async ({ serve
 });
 
 test('programs go to the browser unless that setting is off', async ({ context, worker, served }) => {
-  const server = await serve('--size', '8', '--filename', 'setup.exe');
+  const server = await serve('--size', '8', '--rate', RACE_FREE, '--filename', 'setup.exe');
   served.push(server);
   await start(context, server.url);
   const d = await waitForCompleted(worker, fromBrowser);
@@ -297,7 +305,7 @@ test('programs go to the browser unless that setting is off', async ({ context, 
 });
 
 test('excluded sites and the number of connections follow the settings', async ({ context, worker, served }) => {
-  const server = await serve('--size', '8', '--filename', 'data.bin', '--log');
+  const server = await serve('--size', '8', '--rate', RACE_FREE, '--filename', 'data.bin', '--log');
   served.push(server);
   let log = '';
   server.process.stdout!.on('data', (c: Buffer) => (log += c.toString()));
@@ -403,7 +411,7 @@ test('a server that refuses extra connections still delivers, and YDM remembers'
 });
 
 test('the speed limit holds YDM back', async ({ context, worker, served }) => {
-  const server = await serve('--size', '8', '--filename', 'limited.bin');
+  const server = await serve('--size', '8', '--rate', RACE_FREE, '--filename', 'limited.bin');
   served.push(server);
   await setLocal(worker, { speedLimit: 2 * 2 ** 20 });
   const t = Date.now();
