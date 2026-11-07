@@ -14,6 +14,8 @@ interface Job {
   blobUrl?: string;
   /** Latest speed limit, also when it changes before the worker starts. */
   limit?: number;
+  /** Latest connection budget, also when it changes before the worker starts. */
+  max?: number;
   /** Paused: keep the partial file when the worker stops. */
   keep?: boolean;
 }
@@ -39,6 +41,11 @@ export class Engine {
         if (job) job.limit = cmd.bytesPerSecond;
         return job?.worker?.postMessage({ type: 'limit', bytesPerSecond: cmd.bytesPerSecond });
       }
+      case 'connections': {
+        const job = this.jobs.get(cmd.id);
+        if (job) job.max = cmd.max;
+        return job?.worker?.postMessage({ type: 'connections', max: cmd.max });
+      }
       case 'release':
         return void this.release(cmd.id);
       case 'prune':
@@ -50,7 +57,7 @@ export class Engine {
 
   private async start({ id, url, name, connections, resume, limit }: Extract<EngineCommand, { type: 'add' }>) {
     const worker = new DownloadWorker();
-    const job: Job = { worker, limit };
+    const job: Job = { worker, limit, max: connections };
     this.jobs.set(id, job);
     await this.cleaned;
     worker.onmessage = (e: MessageEvent<WorkerEvent>) => void this.onWorker(id, e.data);
@@ -60,12 +67,13 @@ export class Engine {
       this.emit({ type: 'failed', id, reason: { key: 'reason.engine', params: { detail: e.message || 'worker' } }, retryInBrowser: true });
       void this.release(id);
     };
-    worker.postMessage({ type: 'start', url, name, connections, file: fileName(id), resume, limit: job.limit });
+    worker.postMessage({ type: 'start', url, name, connections: job.max ?? connections, file: fileName(id), resume, limit: job.limit });
   }
 
   private async onWorker(id: number, msg: WorkerEvent) {
     switch (msg.type) {
       case 'started':
+      case 'capped':
       case 'progress':
       case 'checkpoint':
         return this.emit({ ...msg, id });

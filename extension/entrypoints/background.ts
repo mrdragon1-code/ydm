@@ -1,4 +1,5 @@
 import type { Browser } from 'wxt/browser';
+import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
 import { pickLocale, setLocale, t } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
 import { fromUrl, sanitize } from '@/lib/naming';
@@ -16,7 +17,11 @@ import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } 
 /** The engine page is closed after this long with nothing to do. */
 const IDLE_CLOSE_MS = 30_000;
 /** Finished downloads kept in the list. */
-const HISTORY = 50;
+const HISTORY = 500;
+/** Progress reaches open pages at most this often. */
+const NOTIFY_MS = 250;
+/** State changes are written to storage at most this often. */
+const PERSIST_MS = 1000;
 const POST_MEMORY_MS = 2 * 60_000;
 /** How the browser names YDM as the initiator of its own requests. */
 const EXTENSION_HOST = new URL(browser.runtime.getURL('/')).host;
@@ -43,6 +48,10 @@ interface Entry extends Item {
   pausing?: boolean;
   /** Speed limit last sent to the engine. */
   limitSent?: number;
+  /** Connection budget last sent to the engine. */
+  connectionsSent?: number;
+  /** Host the file comes from, after redirects. */
+  host?: string;
 }
 
 export default defineBackground(() => {
@@ -57,12 +66,19 @@ export default defineBackground(() => {
   /** Browser download id → our id, for files being saved. */
   const saving = new Map<number, number>();
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Most connections each host accepted before refusing more. */
+  let hostCaps: Record<string, HostCap> = {};
+  /** Items changed since open pages last heard; null: send everything. */
+  let dirty: Set<number> | null = null;
+  let notifyTimer: ReturnType<typeof setTimeout> | undefined;
+  let persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   const link = createLink(onEngineEvent);
 
   // The list survives a service worker restart and the browser being closed.
   const restored = (async () => {
-    const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId']);
+    const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId', 'hostCaps']);
+    hostCaps = freshCaps((stored.hostCaps as Record<string, HostCap>) ?? {});
     settings = readSettings(stored);
     await applyLanguage();
     nextId = (stored.nextId as number) ?? 0;
@@ -190,12 +206,20 @@ export default defineBackground(() => {
 
   function pump() {
     let running = [...items.values()].filter((i) => i.state === 'running').length;
+    const starting: Entry[] = [];
     for (const item of items.values()) {
       if (running >= settings.parallel) break;
       if (item.state !== 'queued') continue;
       item.state = 'running';
       item.startedAt = Date.now();
+      item.host = hostOf(item.url);
+      item.connectionsSent = undefined;
       running++;
+      starting.push(item);
+    }
+    const shares = connectionShares();
+    for (const item of starting) {
+      item.connectionsSent = shares.get(item.id) ?? settings.connections;
       void (async () => {
         await setReferrer(item, [item.url]);
         item.limitSent = share();
@@ -204,13 +228,33 @@ export default defineBackground(() => {
           id: item.id,
           url: item.url,
           name: item.hint,
-          connections: settings.connections,
+          connections: item.connectionsSent!,
           resume: item.checkpoint,
           limit: item.limitSent,
         });
       })();
     }
     applyLimits();
+    applyConnections(shares);
+  }
+
+  /** Each running download's part of its host's six connections. */
+  function connectionShares(): Map<number, number> {
+    const running = [...items.values()]
+      .filter((i) => i.state === 'running')
+      .map((i) => ({ id: i.id, host: i.host ?? hostOf(i.url) }));
+    return budgets(running, settings.connections, (host) => hostCaps[host]?.connections);
+  }
+
+  /** When downloads from a host start or stop, the others get a new share. */
+  function applyConnections(shares = connectionShares()) {
+    for (const item of items.values()) {
+      const max = shares.get(item.id);
+      if (item.state !== 'running' || max === undefined || item.connectionsSent === undefined) continue;
+      if (item.connectionsSent === max) continue;
+      item.connectionsSent = max;
+      void link.send({ type: 'connections', id: item.id, max });
+    }
   }
 
   /** Each running download's part of the speed limit. */
@@ -280,11 +324,22 @@ export default defineBackground(() => {
           void link.send({ type: 'cancel', id: item.id });
           break;
         }
-        // Redirected to another host (a CDN): it gets the Referer too.
+        // Redirected to another host (a CDN): it gets the Referer too, and
+        // the connection budget is that host's.
         if (new URL(event.url).hostname !== new URL(item.url).hostname) {
           void setReferrer(item, [item.url, event.url]);
         }
+        item.host = hostOf(event.url);
         break;
+      case 'capped': {
+        // The server refused more connections: remembered for this host.
+        const host = item.host ?? hostOf(item.url);
+        const known = hostCaps[host]?.connections ?? Infinity;
+        hostCaps[host] = { connections: Math.min(known, event.connections), at: Date.now() };
+        void browser.storage.local.set({ hostCaps });
+        applyConnections();
+        return;
+      }
       case 'progress': {
         const now = Date.now();
         if (item.sampledAt !== undefined && now > item.sampledAt) {
@@ -296,12 +351,12 @@ export default defineBackground(() => {
         item.done = event.done;
         item.total = event.total;
         item.parts = event.parts;
-        return notify(); // progress is not worth persisting
+        return notify(item.id); // progress is not worth persisting
       }
       case 'checkpoint':
         item.checkpoint = event.checkpoint;
         item.checkpointAt = Date.now();
-        return persist();
+        return schedulePersist();
       case 'ready':
         clearReferrer(item.id);
         item.elapsed = item.startedAt ? (item.elapsedBefore ?? 0) + Date.now() - item.startedAt : undefined;
@@ -342,7 +397,7 @@ export default defineBackground(() => {
     }
     if (!isActive(item)) item.parts = undefined;
     pump();
-    update();
+    update(item.id);
   }
 
   /** The browser copies the finished file into Downloads, choosing the final
@@ -409,7 +464,7 @@ export default defineBackground(() => {
       popups.delete(port);
       scheduleIdleClose();
     });
-    void restored.then(() => port.postMessage(snapshot()));
+    void restored.then(() => port.postMessage(snapshot(null)));
   });
 
   async function onPopup(cmd: PopupCommand) {
@@ -479,40 +534,67 @@ export default defineBackground(() => {
     update();
   }
 
-  function snapshot(): PopupState {
-    const list = [...items.values()]
-      .reverse()
-      .map(({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint }) => ({
-        id,
-        name,
-        state,
-        done,
-        total,
-        speed,
-        reason,
-        elapsed,
-        parts,
-        resumable: checkpoint !== undefined,
-      }));
-    return { type: 'state', enabled: settings.enabled, minSize: settings.minSize, items: list };
+  /** The whole list (`changed` null), or only the items in `changed`. */
+  function snapshot(changed: Set<number> | null): PopupState {
+    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url }: Entry): Item => ({
+      id,
+      name,
+      state,
+      done,
+      total,
+      speed,
+      reason,
+      elapsed,
+      parts,
+      url,
+      resumable: checkpoint !== undefined,
+    });
+    const base = { enabled: settings.enabled, minSize: settings.minSize, settings };
+    if (changed) {
+      const list = [...changed].map((id) => items.get(id)).filter((i): i is Entry => !!i);
+      const removed = [...changed].filter((id) => !items.has(id));
+      return { type: 'patch', ...base, items: list.map(view), removed };
+    }
+    // Newest first.
+    return { type: 'state', ...base, items: [...items.values()].reverse().map(view) };
   }
 
-  function notify() {
-    const state = snapshot();
-    for (const port of popups) port.postMessage(state);
+  /** Tells open pages what changed, at most every NOTIFY_MS. Nothing to
+   * do while no page is open. `id` undefined means the whole list. */
+  function notify(id?: number) {
+    if (!popups.size) return;
+    if (id === undefined) dirty = null;
+    else if (dirty) dirty.add(id);
+    if (notifyTimer !== undefined) return;
+    notifyTimer = setTimeout(() => {
+      notifyTimer = undefined;
+      const state = snapshot(dirty);
+      dirty = new Set();
+      for (const port of popups) port.postMessage(state);
+    }, NOTIFY_MS);
   }
 
   // --- housekeeping ---------------------------------------------------------
 
-  /** After a state change: persist, refresh popup and badge. */
-  function update() {
-    persist();
-    notify();
+  /** After a state change: persist, refresh popup and badge. `id`: the
+   * one item that changed, if only one did. */
+  function update(id?: number) {
+    schedulePersist();
+    notify(id);
     const active = [...items.values()].filter(isActive).length;
     const action = browser.action ?? browser.browserAction;
     void action.setBadgeText({ text: active ? String(active) : '' });
     void action.setBadgeBackgroundColor({ color: '#3b6ef5' });
     scheduleIdleClose();
+  }
+
+  /** Coalesces writes: a burst of state changes costs one write. */
+  function schedulePersist() {
+    if (persistTimer !== undefined) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = undefined;
+      persist();
+    }, PERSIST_MS);
   }
 
   function persist() {

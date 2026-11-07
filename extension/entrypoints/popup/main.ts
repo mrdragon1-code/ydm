@@ -28,7 +28,20 @@ document.getElementById('settings')!.addEventListener('click', () => {
   void browser.runtime.openOptionsPage();
   window.close();
 });
-port.onMessage.addListener((msg) => render(msg as PopupState));
+/** Newest first, as the background sends it. */
+let known: Item[] = [];
+port.onMessage.addListener((raw) => {
+  const msg = raw as PopupState;
+  if (msg.type === 'state') known = msg.items;
+  else {
+    const changed = new Map(msg.items.map((i) => [i.id, i]));
+    const gone = new Set(msg.removed);
+    known = known.filter((i) => !gone.has(i.id)).map((i) => changed.get(i.id) ?? i);
+    const fresh = msg.items.filter((i) => !known.some((k) => k.id === i.id));
+    known = [...fresh.sort((a, b) => b.id - a.id), ...known];
+  }
+  render({ ...msg, type: 'state', items: known });
+});
 
 interface Row {
   el: HTMLLIElement;

@@ -31,9 +31,10 @@ async fn main() -> std::io::Result<()> {
             "--no-ranges" => cfg.ranges = false,
             "--forbid-ranges" => cfg.forbid_ranges = true,
             "--log" => cfg.log = true,
+            "--max-connections" => cfg.max_connections = Some(value() as usize),
             _ => {
                 eprintln!(
-                    "usage: ydm-testserver [--port P] [--size MB] [--rate KB/s] [--no-ranges] [--forbid-ranges] [--log] [--filename NAME] [--require-cookie NAME=VALUE] [--require-referer PREFIX]"
+                    "usage: ydm-testserver [--port P] [--size MB] [--rate KB/s] [--no-ranges] [--forbid-ranges] [--log] [--max-connections N] [--filename NAME] [--require-cookie NAME=VALUE] [--require-referer PREFIX]"
                 );
                 std::process::exit(2);
             }

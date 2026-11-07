@@ -95,6 +95,56 @@ describe('Segments', () => {
     expect(Segments.resume([], 4).complete()).toBe(true);
   });
 
+  /** Segments on a fake clock: `run(id, bytesPerSecond, ms)` fetches. */
+  function timed(total: number, connections: number) {
+    let t = 0;
+    const segs = new Segments(total, connections, () => t);
+    const run = (speeds: number[], ms: number) => {
+      for (let step = 0; step < ms; step += 250) {
+        t += 250;
+        speeds.forEach((bps, id) => segs.claim(id, Math.floor(bps / 4)));
+      }
+    };
+    return { segs, run };
+  }
+
+  it('an idle connection helps the range that will finish last, not the largest', () => {
+    const { segs, run } = timed(64 * MB, 3);
+    // 0 has just finished. 1 is fast with the most left; 2 crawls with less
+    // left, but will finish last.
+    const jump = (id: number, pos: number) => Object.assign(segs.get(id), { pos, sampledPos: pos });
+    jump(0, segs.get(0).end - 1);
+    jump(2, segs.get(2).end - 8 * MB);
+    run([4, 8 * MB, MB], 1000);
+    expect(segs.remaining(1)).toBeGreaterThan(segs.remaining(2));
+    segs.get(0).pos = segs.get(0).end;
+    const helper = segs.nextWork()!;
+    expect(segs.get(helper).end).toBe(64 * MB);
+    // The helper starts at about the others' speed, so it takes most of the slow tail.
+    expect(segs.remaining(helper)).toBeGreaterThan(segs.remaining(2));
+    assertContiguous(segs, 64 * MB);
+  });
+
+  it('spots a connection far slower than the others', () => {
+    const { segs, run } = timed(64 * MB, 3);
+    run([4 * MB, 4 * MB, MB / 2], 2000);
+    expect(segs.straggler()).toBe(2);
+  });
+
+  it('no straggler when all are alike', () => {
+    const { segs, run } = timed(64 * MB, 3);
+    run([4 * MB, 3 * MB, 4 * MB], 2000);
+    expect(segs.straggler()).toBeNull();
+  });
+
+  it('a connection added mid-download is counted in', () => {
+    const segs = new Segments(16 * MB, 2);
+    expect(segs.running).toBe(2);
+    expect(segs.addWork()).not.toBeNull();
+    expect(segs.running).toBe(3);
+    assertContiguous(segs, 16 * MB);
+  });
+
   it('a leaving connection and a retiring one never strand a segment', () => {
     const segs = new Segments(2 * MB, 2);
     segs.claim(0, MB);

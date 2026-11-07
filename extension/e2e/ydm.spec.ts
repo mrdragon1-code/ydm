@@ -80,9 +80,19 @@ function setLocal(worker: Worker, values: object) {
   return worker.evaluate((v) => (globalThis as ExtensionGlobal).chrome.storage.local.set(v), values);
 }
 
+/** YDM's list as stored. State is written a second after it changes, so
+ * this waits until no item is still on its way (queued, running, saving). */
 async function ydmItems(worker: Worker) {
-  const { items } = await worker.evaluate(() => (globalThis as ExtensionGlobal).chrome.storage.local.get('items'));
-  return items ?? [];
+  const read = async () =>
+    (await worker.evaluate(() => (globalThis as ExtensionGlobal).chrome.storage.local.get('items'))).items ?? [];
+  // An empty list may just not be written yet: give it the write delay.
+  for (const deadline = Date.now() + 5000, empty = Date.now() + 1500; Date.now() < deadline; ) {
+    const items = await read();
+    const settled = !items.some((i) => ['queued', 'running', 'saving'].includes(i.state));
+    if (settled && (items.length > 0 || Date.now() > empty)) return items;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return read();
 }
 
 async function waitForCompleted(worker: Worker, match: (d: Download) => boolean): Promise<Download> {
@@ -109,6 +119,27 @@ function sha256(file: string): Promise<string> {
       .on('end', () => resolve(hash.digest('hex')))
       .on('error', reject);
   });
+}
+
+/** Bytes covered by the ranged requests in a server log, overlaps counted
+ * once: when a connection splits a range or starts over, the new request
+ * covers bytes an earlier one had asked for but never received. */
+function requestedBytes(log: string): number {
+  const ranges = log
+    .split('\n')
+    .map((l) => /^GET \/file range=bytes=(\d+)-(\d+) /.exec(l))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => [Number(m[1]), Number(m[2]) + 1] as const)
+    .filter(([a, b]) => b - a > 1)
+    .sort((x, y) => x[0] - y[0]);
+  let total = 0;
+  let end = -1;
+  for (const [a, b] of ranges) {
+    if (b <= end) continue;
+    total += b - Math.max(a, end);
+    end = b;
+  }
+  return total;
 }
 
 const fromYdm = (d: Download) => d.url.startsWith('blob:chrome-extension://');
@@ -238,12 +269,7 @@ test('closing the browser mid-download resumes where it stopped', async ({ serve
     const d = await waitForCompleted(worker, fromYdm);
     expect(await sha256(d.filename)).toBe(server.sha256);
     // After the restart only the missing part was fetched again.
-    const refetched = log
-      .slice(before)
-      .split('\n')
-      .map((l) => /^GET \/file range=bytes=(\d+)-(\d+) /.exec(l))
-      .filter((m) => m !== null && m[1] !== m[2] && !(m[1] === '0' && m[2] === '0'))
-      .reduce((n, m) => n + Number(m![2]) - Number(m![1]) + 1, 0);
+    const refetched = requestedBytes(log.slice(before));
     console.log(`after restart: ${(refetched / 2 ** 20).toFixed(1)} MB of 24 fetched again`);
     expect(refetched).toBeGreaterThan(0);
     expect(refetched).toBeLessThan(18 * 2 ** 20);
@@ -313,12 +339,7 @@ test('pause keeps what is on disk; resume fetches only the rest', async ({ conte
   await row.getByRole('button', { name: 'Riprendi' }).click();
   const d = await waitForCompleted(worker, fromYdm);
   expect(await sha256(d.filename)).toBe(server.sha256);
-  const refetched = log
-    .slice(before)
-    .split('\n')
-    .map((l) => /^GET \/file range=bytes=(\d+)-(\d+) /.exec(l))
-    .filter((m) => m !== null)
-    .reduce((n, m) => n + Number(m![2]) - Number(m![1]) + 1, 0);
+  const refetched = requestedBytes(log.slice(before));
   // About three seconds at 2 MB/s were kept.
   expect(refetched).toBeLessThan(21 * 2 ** 20);
   await expect(row).toHaveAttribute('data-state', 'completed');
@@ -338,6 +359,47 @@ test('a cancelled download can be tried again', async ({ context, worker, served
   const d = await waitForCompleted(worker, fromYdm);
   expect(await sha256(d.filename)).toBe(server.sha256);
   await expect(row).toHaveAttribute('data-state', 'completed');
+});
+
+test('downloads from one host share six connections and get faster as they adapt', async ({
+  context,
+  worker,
+  served,
+}) => {
+  // 1 MB/s per connection: every extra connection adds speed, up to the budget.
+  const server = await serve('--size', '24', '--rate', '1024', '--filename', 'shared.bin', '--log');
+  served.push(server);
+  let log = '';
+  server.process.stdout!.on('data', (c: Buffer) => (log += c.toString()));
+  await setLocal(worker, { connections: 6 });
+  await start(context, `${server.url}?a`);
+  await start(context, `${server.url}?b`);
+  const done = async () => (await downloads(worker)).filter((d) => d.state === 'complete' && fromYdm(d));
+  for (const deadline = Date.now() + 90_000; (await done()).length < 2; ) {
+    if (Date.now() > deadline) throw new Error('downloads did not complete');
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  for (const d of await done()) expect(await sha256(d.filename)).toBe(server.sha256);
+  // Ranged requests from YDM: both downloads used several connections.
+  const ranged = log.split('\n').filter((l) => /^GET \/file\?[ab] range=bytes=\d+-\d* /.test(l));
+  expect(ranged.filter((l) => l.includes('?a')).length).toBeGreaterThan(1);
+  expect(ranged.filter((l) => l.includes('?b')).length).toBeGreaterThan(1);
+});
+
+test('a server that refuses extra connections still delivers, and YDM remembers', async ({
+  context,
+  worker,
+  served,
+}) => {
+  const server = await serve('--size', '24', '--rate', '2048', '--filename', 'strict.bin', '--max-connections', '2');
+  served.push(server);
+  await setLocal(worker, { connections: 6 });
+  await start(context, server.url);
+  const d = await waitForCompleted(worker, fromYdm);
+  expect(await sha256(d.filename)).toBe(server.sha256);
+  const { hostCaps } = await worker.evaluate(() => (globalThis as ExtensionGlobal).chrome.storage.local.get('hostCaps'));
+  const cap = Object.values(hostCaps as Record<string, { connections: number }>)[0];
+  expect(cap?.connections).toBeLessThanOrEqual(2);
 });
 
 test('the speed limit holds YDM back', async ({ context, worker, served }) => {
