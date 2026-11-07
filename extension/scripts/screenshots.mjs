@@ -77,13 +77,20 @@ try {
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(values.out, `downloads-${suffix}.png`) });
 
-  // The popup in its real size, centred on a plain backdrop.
+  // The popup at its real size, centred on a backdrop: stores want 1280×800.
   const popup = await context.newPage();
   await popup.setViewportSize({ width: 380, height: 520 });
   await popup.goto(`chrome-extension://${id}/popup.html`);
   await popup.locator('#list li').first().waitFor();
   await popup.waitForTimeout(800);
-  await popup.screenshot({ path: path.join(values.out, `popup-${suffix}.png`) });
+  const shot = (await popup.screenshot()).toString('base64');
+  const frame = await context.newPage();
+  const backdrop = values.dark ? '#0b100d' : '#e8efea';
+  await frame.setContent(
+    `<body style="margin:0;height:800px;display:grid;place-items:center;background:${backdrop}">` +
+      `<img src="data:image/png;base64,${shot}" style="border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.25)">`,
+  );
+  await frame.screenshot({ path: path.join(values.out, `popup-${suffix}.png`) });
 
   await page.goto(`chrome-extension://${id}/options.html`);
   await page.waitForTimeout(500);

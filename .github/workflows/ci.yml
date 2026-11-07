@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # The end-to-end tests drive real Chromium and Firefox on Windows, as
+    # most users run them; the test server is a Windows build.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      - name: Build the test server
+        working-directory: engine
+        run: cargo build --release -p ydm-testserver
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build Chrome and Firefox
+        run: |
+          npm run build
+          npm run build:firefox
+
+      - name: Lint the Firefox add-on
+        run: npx web-ext lint --source-dir .output/firefox-mv2 --warnings-as-errors
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: End-to-end tests (Chromium)
+        run: npx playwright test
+
+      - name: End-to-end tests (Firefox)
+        run: |
+          choco install firefox --no-progress -y
+          node e2e/firefox.mjs
+          node e2e/firefox-resume.mjs
+
+      - name: Keep the test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: extension/test-results
+          retention-days: 7

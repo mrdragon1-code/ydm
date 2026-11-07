@@ -1,126 +1,122 @@
 # YDM — Yamantau Download Manager
 
-Download più veloci e sicuri, dentro il browser. Si installa come una qualsiasi
-estensione e funziona subito: niente programmi da installare, niente finestre.
+Faster, safer downloads, right inside your browser. Install it like any
+extension and it just works: no program to install, no extra windows.
+
+**[Leggi in italiano](README.it.md)** · [Privacy](PRIVACY.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ```
 Browser
- ├─ background        intercetta i download, coda, badge, menu, popup
- ├─ motore            offscreen document (Chrome/Edge/Brave) · background page (Firefox)
- │    └─ un Web Worker per download
- │         ├─ N richieste parallele con Range, work-stealing tra connessioni
- │         └─ scritture sincrone e posizionali su OPFS (su disco, non in RAM)
- └─ alla fine il browser salva il file in Download, come un suo download
+ ├─ background       takes over downloads, queue, per-host connection budget, badge, menus
+ ├─ engine           offscreen document (Chrome/Edge/Brave) · background page (Firefox)
+ │    ├─ one Web Worker per download
+ │    │    ├─ parallel Range requests, adaptive connection count, work stealing
+ │    │    └─ batched positional writes to OPFS (on disk, not in RAM)
+ │    └─ one worker computing SHA-256 while the file is saved
+ └─ at the end the browser saves the file to Downloads, like one of its own
 ```
 
-## Cosa fa
+## What it does
 
-- **Prende i download grandi** (≥ 5 MB, http/https) e li scarica a segmenti paralleli.
-  Il resto lo lascia al browser: file piccoli, dimensione sconosciuta, incognito,
-  risultati di un modulo POST (YDM li rifarebbe come GET).
-- **Non perde mai un download**: se YDM viene rifiutato o fallisce, il download torna
-  al downloader del browser, e il popup dice perché (es. «il sito non accetta download
-  esterni (403)», «spazio su disco insufficiente»).
-- **Siti con protezione anti-hotlink**: YDM manda il Referer della pagina, come il
-  browser (solo l'origine verso altri siti), tramite una regola di rete limitata alle
-  sue richieste e ai domini del download.
-- **Riprende dopo la chiusura del browser**: ogni 3 secondi YDM salva a che punto è;
-  alla riapertura riscarica solo i pezzi mancanti, e solo se il server ha ancora lo
-  stesso identico file (stesso ETag o data di modifica e stessa dimensione), altrimenti
-  ricomincia da zero.
-- **Confronto immediato**: a download finito il popup mostra tempo e velocità media.
-- **Impostazioni** (icona nel popup): attivo/spento, dimensione minima, connessioni per
-  download (1–8), download contemporanei (1–6), siti esclusi, e **«Lascia al browser i
-  programmi»** (attiva di serie): `.exe`, `.msi`, `.bat` e simili li scarica il browser,
-  così Safe Browsing controlla anche il sito di provenienza. Spenta, anche i programmi
-  vanno veloci.
-- **Barra a segmenti**: nel popup si vede ogni connessione riempire il suo pezzo di file.
-- **Pausa, Riprendi, Riprova** nel popup: la pausa tiene su disco quello già scaricato.
-- **Limite di velocità** (impostazioni), diviso tra i download in corso e applicato subito.
-- **Avvio senza richiesta di prova**: la prima connessione chiede il file da 0 in poi e fa
-  da sonda (dimensione, range, ETag); il suo flusso diventa il primo segmento. Una richiesta
-  e un viaggio di rete in meno per download; sotto i 16 MB basta una richiesta sola.
-- **Menu contestuale** «Scarica con YDM» su qualsiasi link.
-- **Popup** con avanzamento, velocità, tempo rimanente, annulla, mostra nella cartella;
-  un interruttore per spegnerlo. Badge con i download attivi.
+- **Takes over large downloads** (5 MB and up, http/https) and fetches them in parallel
+  pieces. Everything else stays with the browser: small files, unknown sizes, incognito,
+  results of a form POST (YDM would repeat them as a GET).
+- **Adaptive connections**: starts with four, adds more only while the speed keeps rising,
+  backs off for good on a server that refuses them (remembered per site for a week).
+- **Shares the browser's limit**: browsers open at most six connections to one site. YDM
+  divides those six among its downloads from that site instead of queueing behind itself,
+  and gives a finished download's share to the others.
+- **No straggler at the end**: an idle connection helps the piece that will finish last,
+  and a connection crawling far behind the others starts over.
+- **Never loses a download**: if a site refuses YDM, the download goes back to the
+  browser and the popup says why ("the site does not accept external downloads (403)").
+- **Resumes after the browser is closed**, fetching only the missing pieces, and only if
+  the server still has the very same file (same ETag or date, same size).
+- **Downloads page**: history, search, filters, details, the **SHA-256** of each file with
+  a box to compare it with the one the site publishes.
+- **Add URLs** (paste one or many) and **download all links of a page**, filtered by type.
+- **Notification** when a download finishes, with a button to show the file.
+- **Settings**: on/off, minimum size, maximum connections (1–6), simultaneous downloads,
+  speed limit, excluded sites, and **"Leave programs to the browser"** (on by default),
+  so Safe Browsing also checks the site `.exe`, `.msi` and similar files come from.
+- **Your language**: English and Italian are built in. In Chrome, any other language is
+  translated **on your device by the browser's own translator** (no server, no account):
+  YDM offers it once, and keeps the result.
 
-## Come scarica
+## How it downloads
 
-1. **Probe** — `GET` con `Range: bytes=0-0`: dimensione, supporto ai range, ETag, nome.
-2. **Segmenti** — 4 connessioni (oltre, i mirror pubblici rispondono 429 o bloccano l'IP).
-   Una connessione che finisce prende metà del segmento più grande rimasto.
-3. **Connessioni rifiutate** — dopo due errori di fila una connessione si ritira e lascia
-   il lavoro alle altre; il download fallisce solo se falliscono tutte.
-4. **Scrittura** — ogni pezzo va subito al suo posto nel file OPFS: la RAM non dipende
-   dalla dimensione del file.
-5. **Salvataggio** — il browser copia il file in Download: sceglie il nome finale,
-   applica Mark-of-the-Web e Safe Browsing come per ogni suo download.
+1. **First request** — `GET` with `Range: bytes=0-`: its headers give the size, range
+   support, ETag and name, and its body becomes the first piece. No separate probe.
+2. **Pieces** — four connections to start, more while they pay off, within the site's
+   share of the browser's six.
+3. **Refused connections** — after two failures in a row a connection retires and leaves
+   its piece to the others; the download fails only if all of them fail.
+4. **Writing** — network chunks are gathered into 1 MB writes at their exact place in the
+   OPFS file: memory use does not depend on the file size.
+5. **Saving** — the browser copies the file to Downloads, picking the final name and
+   applying Mark-of-the-Web and Safe Browsing as for any download.
 
-Sicurezza: i cookie li mette il browser, per sito, come nei suoi download (nessun
-cookie può finire a un altro sito); `If-Range` impedisce di unire versioni diverse del
-file; i nomi dal server vengono ripuliti (cartelle, nomi riservati Windows, caratteri
-bidi che nascondono l'estensione) e mostrati solo come testo; i download in incognito
-non passano mai da YDM.
+Security: the browser adds cookies per site, as for its own downloads (no cookie can
+reach another site); `If-Range` prevents mixing two versions of a file; server-supplied
+names are cleaned (folders, reserved Windows names, bidi characters that hide the
+extension) and shown as text only; incognito downloads never go through YDM.
 
-### Il limite da sapere
+### Limits worth knowing
 
-La velocità extra c'è quando il server limita la banda **per connessione**. Con i
-server HTTP/2 (molte CDN) il browser fa passare tutte le richieste parallele su una sola
-connessione e un'estensione non può cambiarlo: lì YDM va come il browser, non più piano.
-Inoltre il file viene scritto due volte (OPFS, poi Download): su file molto grandi la
-copia finale richiede qualche secondo in più.
+The extra speed comes from servers that limit bandwidth **per connection**. With HTTP/2
+servers (many CDNs) the browser carries all parallel requests over one connection and an
+extension cannot change that: there YDM is as fast as the browser, not slower. The file
+is also written twice (OPFS, then Downloads): on very large files the final copy takes a
+few extra seconds.
 
-Mark-of-the-Web: verificato in Chromium e Firefox (`ZoneId=3`, il file risulta da
-Internet), ma in Chrome l'origine registrata è l'estensione (`HostUrl=chrome-extension://…`)
-e non il sito: il browser salva un blob dell'estensione e l'API non permette di indicare
-la sorgente. Per lo stesso motivo il controllo Safe Browsing sull'indirizzo del sito
-potrebbe non scattare (resta quello sul contenuto degli eseguibili): da verificare a mano
-in Chrome con testsafebrowsing.appspot.com.
+Mark-of-the-Web is applied (`ZoneId=3`), but in Chrome the recorded origin is the
+extension (`HostUrl=chrome-extension://…`), because the browser saves a blob and the API
+cannot name the source. For that reason the Safe Browsing check on the site's address may
+not run for files YDM saves; hence the "Leave programs to the browser" setting.
 
-### Misure (test end-to-end)
+### Measurements (end-to-end tests)
 
-24 MB con limite di 2 MB/s per connessione, da un sito che richiede il login,
-file identico byte per byte:
+24 MB from a site limited to 2 MB/s per connection, behind a login, byte-identical file:
 
-| | browser da solo | YDM |
+| | browser alone | YDM |
 |---|---|---|
-| Chromium | 12,2 s | 3,2 s |
-| Firefox | 12,7 s | 3,1 s |
+| Chromium | 12.2 s | 3.4 s |
+| Firefox | 12.7 s | 3.1 s |
 
-## Sviluppo (`extension/`)
+## Install
+
+- **Chrome, Edge, Brave**: from the Chrome Web Store / Edge Add-ons (links once published),
+  or from a [release](../../releases): unzip `ydm-*-chrome.zip`, open `chrome://extensions`,
+  enable developer mode, *Load unpacked*.
+- **Firefox** (140 or later): from addons.mozilla.org (link once published).
+
+## Development (`extension/`)
 
 ```sh
 npm install
-npm run dev            # sviluppo: carica una volta .output/chrome-mv3-dev nel tuo Chrome,
-                       # poi si ricarica da sola a ogni modifica (finché il comando è attivo)
-npm run dev:firefox    # uguale per Firefox: .output/firefox-mv2-dev da about:debugging
-npm test               # unit test (vitest)
-npm run e2e            # build + test in Chromium reale (Playwright)
-npm run e2e:firefox    # build + test in Firefox reale (web-ext): download e ripresa dopo la chiusura
+npm run dev            # load .output/chrome-mv3-dev once in Chrome; it reloads on every change
+npm run dev:firefox    # same for Firefox: .output/firefox-mv2-dev via about:debugging
+npm test               # unit tests (vitest)
+npm run e2e            # build + tests in a real Chromium (Playwright)
+npm run e2e:firefox    # build + tests in a real Firefox (web-ext): download, resume after restart
 npm run check          # type check
 npm run build          # .output/chrome-mv3   ·   npm run build:firefox
+node scripts/screenshots.mjs   # store screenshots from real downloads
 ```
 
-I test end-to-end usano il server di test in Rust (`engine/crates/ydm-testserver`):
-range, limite per connessione, cookie obbligatorio, server che rifiutano i range.
-Compilarlo una volta con `cargo build --release -p ydm-testserver` dentro `engine/`.
+The end-to-end tests use the Rust test server in `engine/crates/ydm-testserver`
+(ranges, per-connection limits, required cookie or Referer, refused ranges, connection
+caps). Build it once with `cargo build --release -p ydm-testserver` inside `engine/`.
 
-## Installazione permanente
+Firefox keeps Manifest V2 with a persistent background page on purpose: an MV3 event
+page would be stopped in the middle of a download.
 
-- **Chrome / Edge / Brave**: `npm run release`, poi «Carica estensione non pacchettizzata»
-  sulla cartella `release/chrome` (modalità sviluppatore). Resta installata.
-- **Firefox**: le versioni normali tengono solo estensioni firmate da Mozilla. Con un account
-  gratuito su addons.mozilla.org e le sue chiavi API, `scripts/installa-firefox.ps1` firma
-  (canale «unlisted», non pubblica) e apre l'installazione. Ogni firma vuole una versione nuova
-  in `package.json`.
+## Releasing
 
-## Stato
+Raise `version` in `extension/package.json`, commit, then tag: `git tag v1.0.1 && git push --tags`.
+The *Release* workflow builds the zips, attaches them to a GitHub release and submits them
+to every store whose secrets are set (see [store/PUBLISHING.md](store/PUBLISHING.md)).
 
-| | |
-|---|---|
-| Motore nell'estensione, coda, popup, menu, fallback al browser | ✅ testato in Chromium |
-| Firefox | ✅ testato in Firefox (download, cookie, velocità, cartella Download) |
-| Ripresa dopo chiusura del browser | ✅ testato in Chromium e Firefox (riscaricata solo la parte mancante) |
-| Impostazioni, programmi al browser, siti esclusi | ✅ testato in Chromium |
-| Connessioni adattive per server | da fare |
-| Pubblicazione su Chrome Web Store, Edge Add-ons, AMO | da fare |
+## License
+
+[MIT](LICENSE)

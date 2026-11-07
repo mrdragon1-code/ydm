@@ -1,0 +1,100 @@
+name: Release
+
+# Push a tag like v1.0.0 (matching "version" in extension/package.json):
+# builds the zips, attaches them to a GitHub release, and submits them to
+# each store whose credentials are set as repository secrets. A store
+# without secrets is skipped with a notice, so the GitHub release always
+# happens.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check the store credentials without submitting'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+
+      - run: npm ci
+
+      - name: Tag matches package.json
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} but package.json says $version"
+            exit 1
+          fi
+
+      - run: npm run check
+      - run: npm test
+
+      - name: Zip for Chrome, Edge and Firefox
+        run: |
+          npx wxt zip
+          npx wxt zip -b firefox
+          ls -l .output/*.zip
+
+      - name: GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" .output/*-chrome.zip .output/*-firefox.zip .output/*-sources.zip \
+            --title "YDM ${GITHUB_REF_NAME}" --generate-notes --verify-tag
+
+      - name: Submit to the stores
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          args=()
+          if [ -n "$CHROME_EXTENSION_ID" ] && [ -n "$CHROME_REFRESH_TOKEN" ]; then
+            args+=(--chrome-zip .output/*-chrome.zip)
+          else
+            echo "::notice::Chrome Web Store skipped: secrets not set"
+          fi
+          if [ -n "$FIREFOX_JWT_ISSUER" ] && [ -n "$FIREFOX_JWT_SECRET" ]; then
+            args+=(--firefox-zip .output/*-firefox.zip --firefox-sources-zip .output/*-sources.zip)
+          else
+            echo "::notice::Firefox Add-ons skipped: secrets not set"
+          fi
+          if [ -n "$EDGE_PRODUCT_ID" ] && [ -n "$EDGE_API_KEY" ]; then
+            args+=(--edge-zip .output/*-chrome.zip)
+          else
+            echo "::notice::Edge Add-ons skipped: secrets not set"
+          fi
+          if [ ${#args[@]} -eq 0 ]; then
+            echo "No store to submit to."
+            exit 0
+          fi
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          npx wxt submit "${args[@]}"

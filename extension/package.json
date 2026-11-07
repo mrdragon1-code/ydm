@@ -1,7 +1,9 @@
 {
   "name": "ydm-extension",
   "private": true,
-  "version": "0.2.0",
+  "version": "1.0.0",
+  "description": "YDM: faster, safer downloads inside the browser.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -14,7 +16,9 @@
     "postinstall": "wxt prepare",
     "test": "vitest run",
     "e2e": "npm run build && playwright test",
-    "e2e:firefox": "npm run build:firefox && node e2e/firefox.mjs && node e2e/firefox-resume.mjs"
+    "e2e:firefox": "npm run build:firefox && node e2e/firefox.mjs && node e2e/firefox-resume.mjs",
+    "screenshots": "node scripts/screenshots.mjs && node scripts/screenshots.mjs --lang it",
+    "promo": "node scripts/promo.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
