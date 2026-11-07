@@ -1,0 +1,10 @@
+[package]
+name = "ydm-testserver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+tokio.workspace = true
+sha2.workspace = true

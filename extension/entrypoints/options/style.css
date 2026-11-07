@@ -1,0 +1,245 @@
+@import '../../assets/theme.css';
+
+body {
+  font-size: 14px;
+}
+
+main {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+}
+
+.status {
+  color: var(--malachite);
+  font: 11px/1 var(--mono);
+}
+
+h1 {
+  margin: 28px 0 8px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+section {
+  margin-top: 32px;
+}
+
+/* Group names: small wide mono, like the wordmark. */
+h2 {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 6px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row > label,
+.row > .label {
+  font-weight: 550;
+}
+
+.row > .help,
+.row > input[type='range'],
+.row > .preview {
+  grid-column: 1 / -1;
+}
+
+.help {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 54ch;
+}
+
+.lead {
+  margin: 12px 0;
+}
+
+select,
+input[type='text'] {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+select {
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.value {
+  font: 600 13px/1 var(--mono);
+  color: var(--malachite);
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--malachite);
+  cursor: pointer;
+}
+
+/* The signature, at rest: the file cut into as many bands as connections. */
+.preview {
+  height: 10px;
+  margin-top: 2px;
+}
+
+.choices {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.choices button {
+  min-width: 34px;
+  height: 32px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--raised);
+  color: var(--ink);
+  font: 12px/1 var(--mono);
+  cursor: pointer;
+}
+
+.choices button:first-child {
+  border-left: 0;
+}
+
+.choices button:hover {
+  background: var(--hover);
+}
+
+.choices button[aria-checked='true'] {
+  background: var(--malachite);
+  color: var(--on-malachite);
+}
+
+.choices button:focus-visible {
+  outline-offset: -2px;
+}
+
+.add {
+  display: flex;
+  gap: 8px;
+}
+
+.add input {
+  flex: 1;
+  min-width: 0;
+}
+
+.button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--malachite);
+  color: var(--on-malachite);
+  font: 550 13px/1 var(--sans);
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.error {
+  min-height: 0;
+  margin-top: 6px;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.error:empty {
+  display: none;
+}
+
+.sites {
+  list-style: none;
+  margin-top: 12px;
+}
+
+.sites li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font: 12px/1.4 var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.sites:empty {
+  display: none;
+}
+
+.sites .link {
+  font: 13px/1 var(--sans);
+}
+
+#noSites[hidden] {
+  display: none;
+}
+
+.link {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+footer {
+  margin-top: 36px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 28px 16px 48px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
+}

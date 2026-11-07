@@ -1,0 +1,208 @@
+@import '../../assets/theme.css';
+
+body {
+  width: 360px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font: 11px/1 var(--mono);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* `display: grid` would otherwise override the hidden attribute. */
+.icon[hidden] {
+  display: none;
+}
+
+.icon:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.icon svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.off {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#list {
+  list-style: none;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+#list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 11px 10px 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 550;
+}
+
+.segbar {
+  margin: 7px 0 6px;
+}
+
+.meta {
+  display: flex;
+  gap: 8px;
+  color: var(--muted);
+  font: 11px/1.5 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta .text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta .conns {
+  flex: none;
+}
+
+li .actions {
+  grid-row: 1 / span 3;
+  grid-column: 2;
+  align-self: start;
+  display: flex;
+  gap: 2px;
+}
+
+li[data-state='paused'] .segbar {
+  opacity: 0.55;
+}
+
+li[data-state='completed'] .segbar {
+  background-color: var(--malachite);
+}
+
+li[data-state='failed'] .meta {
+  color: var(--bad);
+}
+
+li[data-state='browser'] .meta {
+  color: var(--note);
+}
+
+/* A reason is worth reading in full, and in the body face. */
+li:is([data-state='failed'], [data-state='browser']) .meta .text {
+  white-space: normal;
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .segbar {
+  display: none;
+}
+
+li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .name {
+  margin-bottom: 3px;
+}
+
+li[data-state='cancelled'] .name {
+  color: var(--muted);
+}
+
+li.indeterminate .segbar {
+  background-image: linear-gradient(90deg, transparent 0 35%, var(--malachite) 35% 65%, transparent 65%);
+  background-size: 50% 100%;
+  animation: sweep 1.3s linear infinite;
+}
+
+@keyframes sweep {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+.empty {
+  padding: 26px 22px 22px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty p:first-child {
+  color: var(--ink);
+}
+
+.empty .hint {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 14px;
+}
+
+footer:has(button:not([hidden])) {
+  padding: 8px 14px;
+}
+
+.link {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}

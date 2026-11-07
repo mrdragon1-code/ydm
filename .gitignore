@@ -1,0 +1,23 @@
+# Build output
+/engine/target/
+/extension/.output/
+/extension/.wxt/
+/release/
+node_modules/
+
+# Test artefacts
+/extension/test-results/
+/extension/playwright-report/
+*.part
+*.ydm-part
+
+# The retired native engine stays on disk only; the test server is kept
+# because the end-to-end tests need it.
+/engine/crates/ydm/
+/engine/crates/ydm-core/
+/engine/crates/ydm-proto/
+
+# Secrets and local caches
+.env
+.env.*
+/extension/.translate-models/
