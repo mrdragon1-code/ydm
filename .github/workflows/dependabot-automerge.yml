@@ -1,24 +1,44 @@
 name: Dependabot auto-merge
 
-# Dependency updates merge themselves once CI passes (branch protection on
-# main requires the CI check). Minor and patch updates only: a major version
-# waits for a person, since it can change behaviour.
+# Dependency updates merge themselves, but only after the CI "test" check
+# has passed on the pull request. The job waits for that check itself, so
+# nothing untested is merged even without branch protection. Minor and
+# patch updates only: a major version waits for a person.
 on: pull_request
 
 permissions:
   contents: write
   pull-requests: write
+  checks: read
 
 jobs:
   automerge:
     if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - id: meta
         uses: dependabot/fetch-metadata@v2
-      - name: Merge when CI passes
+
+      - name: Wait for CI, then merge if it passed
         if: steps.meta.outputs.update-type != 'version-update:semver-major'
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR"
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          for i in $(seq 1 80); do
+            result=$(gh api "repos/$REPO/commits/$SHA/check-runs?check_name=test" \
+              --jq '[.check_runs[] | select(.status == "completed")] | .[0].conclusion // ""')
+            if [ "$result" = "success" ]; then
+              gh pr merge "$PR" --repo "$REPO" --squash
+              exit 0
+            fi
+            if [ -n "$result" ]; then
+              echo "::warning::CI ended with '$result': not merging; a person should look."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "::warning::CI did not finish in time: not merging."
