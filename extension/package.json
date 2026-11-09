@@ -22,7 +22,7 @@
     "build:e2e": "node -e \"process.env.YDM_REPO=process.env.YDM_REPO||'ydm-test/ydm';require('child_process').execSync('npx wxt build',{stdio:'inherit',env:process.env})\""
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0",
