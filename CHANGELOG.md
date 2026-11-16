@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2
+
+### Fixed
+- Downloads from this computer or a private network (a NAS, a router, a development server)
+  are no longer flagged as suspicious: IPv6 `::1` and local ranges, `0.0.0.0`, `169.254.x`
+  (routers, printers) and `100.64.x` (carrier networks, Tailscale) count as local, like
+  `127.x`, `10.x` and `192.168.x` already did.
+
 ## 1.1.1
 
 ### Fixed

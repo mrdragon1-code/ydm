@@ -8,6 +8,7 @@ import {
   type Endpoints,
   fromVirusTotal,
   incomplete,
+  isLocalIp,
   lookUpHash,
   lookUpUrl,
   MALICIOUS_AT,
@@ -52,6 +53,17 @@ describe('on the device', () => {
       'not a url',
     ]) {
       expect(checkUrl(url)).toEqual([]);
+    }
+  });
+
+  it('addresses at home, at the office or on this computer are not suspicious; bare internet ones are', () => {
+    for (const host of ['[::1]', '[fe80::1]', '[fd00::5]', '0.0.0.0', '127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.1.1', '100.64.0.7']) {
+      expect(isLocalIp(host), host).toBe(true);
+      expect(checkUrl(`http://${host}/f.zip`), host).toEqual([]);
+    }
+    for (const host of ['8.8.8.8', '172.32.0.1', '100.128.0.1', '[2001:db8::1]', '169.255.0.1']) {
+      expect(isLocalIp(host), host).toBe(false);
+      expect(checkUrl(`http://${host}/f.zip`).map((f) => f.reason.key), host).toEqual(['security.local.ipHost']);
     }
   });
 

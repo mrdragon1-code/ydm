@@ -4,8 +4,10 @@
  * Copies from a store update themselves (the store adds `update_url` to the
  * manifest), and so does a Firefox build signed for GitHub (its own
  * `update_url`). A copy loaded unpacked in Chrome cannot: Chrome only
- * updates from its store. For that one only, YDM looks once a day at the
- * latest GitHub release and the popup offers it. One small request to
+ * updates from its store. Installed with the Windows installer, a scheduled
+ * task replaces its files and YDM reloads itself (see background.ts); for
+ * every unpacked copy, YDM also looks once a day at the latest GitHub
+ * release and the popup offers it. One small request to
  * GitHub's public API; nothing about you is sent.
  */
 
