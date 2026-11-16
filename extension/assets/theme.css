@@ -246,7 +246,8 @@ body {
 .mark::after {
   content: '';
   position: absolute;
-  left: 0;
+  /* Over the square, wherever the padding puts it. */
+  left: var(--mark-inset, 0px);
   top: 50%;
   width: 18px;
   height: 18px;
