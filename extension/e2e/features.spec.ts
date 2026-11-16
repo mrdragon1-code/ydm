@@ -3,6 +3,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { ydmWorker } from './ready';
 
 // The 1.0 features: languages, the downloads page, adding URLs, picking a
 // page's links, SHA-256, and the layout holding together.
@@ -53,7 +54,7 @@ const test = base.extend<{ context: BrowserContext; worker: Worker; served: Serv
     await context.close();
   },
   worker: async ({ context }, use) => {
-    await use(context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker')));
+    await use(await ydmWorker(context));
   },
   id: async ({ worker }, use) => {
     await use(new URL(worker.url()).host);
@@ -222,7 +223,7 @@ test('a copy that cannot update itself offers the newer release', async () => {
     });
   try {
     let context = await launch();
-    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const worker = await ydmWorker(context);
     const id = new URL(worker.url()).host;
     await worker.evaluate(() =>
       (globalThis as Ext).chrome.storage.local.set({

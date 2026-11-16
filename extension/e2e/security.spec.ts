@@ -2,6 +2,7 @@ import { type BrowserContext, test as base, chromium, expect, type Worker } from
 import { type ChildProcess, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { ydmWorker } from './ready';
 
 // The Mark-of-the-Web on a file YDM saved, compared with the same file saved
 // by the browser alone. Chrome writes it in the same step that hands the file
@@ -35,7 +36,7 @@ const test = base.extend<{ context: BrowserContext; worker: Worker }>({
     await context.close();
   },
   worker: async ({ context }, use) => {
-    await use(context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker')));
+    await use(await ydmWorker(context));
   },
 });
 

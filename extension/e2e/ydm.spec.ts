@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { ydmWorker } from './ready';
 
 const EXTENSION = path.resolve(import.meta.dirname, '../.output/chrome-mv3');
 const SERVER = path.resolve(import.meta.dirname, '../../engine/target/release/ydm-testserver.exe');
@@ -54,8 +55,7 @@ const test = base.extend<{ context: BrowserContext; worker: Worker; served: Serv
     await context.close();
   },
   worker: async ({ context }, use) => {
-    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-    await use(worker);
+    await use(await ydmWorker(context));
   },
 });
 
@@ -101,7 +101,14 @@ async function waitForCompleted(worker: Worker, match: (d: Download) => boolean)
     if (found) return found;
     await new Promise((r) => setTimeout(r, 200));
   }
-  throw new Error('download did not complete');
+  // What each side was doing, so a failure on CI explains itself.
+  const browserSide = (await downloads(worker)).map(({ url, state, filename }) => ({ url: url.slice(0, 60), state, filename }));
+  const ydmSide = ((await worker.evaluate(() => (globalThis as ExtensionGlobal).chrome.storage.local.get('items'))).items ?? []).map(
+    (i: Record<string, unknown>) => ({ name: i.name, state: i.state, done: i.done, total: i.total, reason: i.reason, security: (i.security as { level?: string } | undefined)?.level }),
+  );
+  throw new Error(`download did not complete
+browser: ${JSON.stringify(browserSide)}
+YDM: ${JSON.stringify(ydmSide)}`);
 }
 
 /**
@@ -247,12 +254,10 @@ test('closing the browser mid-download resumes where it stopped', async ({ serve
       acceptDownloads: true,
       args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
     });
-  const workerOf = async (c: BrowserContext) => c.serviceWorkers()[0] ?? (await c.waitForEvent('serviceworker'));
+  const workerOf = (c: BrowserContext) => ydmWorker(c);
 
   let context = await launch();
   let worker = await workerOf(context);
-  // A just-installed extension: let its listeners register before the click.
-  await new Promise((r) => setTimeout(r, 1000));
   await start(context, server.url);
   // Close once a checkpoint says about a third is on disk.
   const missingBytes = async () => {

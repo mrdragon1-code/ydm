@@ -100,7 +100,7 @@ async function run(scenario) {
     ['parallel ranges through YDM', ranged.length >= 2],
     [`faster than one connection (${SIZE_MB / RATE_MB} s)`, seconds !== null && seconds < (SIZE_MB / RATE_MB) * 0.6],
   ];
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 
   for (const [name, passed] of checks) console.log(`  ${passed ? '✓' : '✗'} ${name}`);
   console.log(

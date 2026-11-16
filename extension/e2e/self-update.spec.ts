@@ -2,6 +2,7 @@ import { chromium, expect, test } from '@playwright/test';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { ydmWorker } from './ready';
 
 // A copy loaded unpacked in Chrome cannot be updated by Chrome. The
 // installer's scheduled task replaces its files; YDM must notice the newer
@@ -26,9 +27,8 @@ test('a newer version on disk is loaded by itself, once no YDM page is open', as
     args: [`--disable-extensions-except=${dir}`, `--load-extension=${dir}`],
   });
   try {
-    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    const worker = await ydmWorker(context);
     const id = new URL(worker.url()).host;
-    await new Promise((r) => setTimeout(r, 1000));
     const before = await worker.evaluate(() => (globalThis as Ext).chrome.runtime.getManifest().version);
 
     // What update-chrome.ps1 does last: the new manifest.

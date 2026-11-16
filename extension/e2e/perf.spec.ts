@@ -1,6 +1,7 @@
 import { chromium, expect, test } from '@playwright/test';
 import { type ChildProcess, spawn } from 'node:child_process';
 import path from 'node:path';
+import { ydmWorker } from './ready';
 
 // Benchmarks, not run by default: `PERF=1 npx playwright test perf`.
 // They time YDM on the local test server, where the network is not the
@@ -41,7 +42,7 @@ for (const mb of [512]) {
       args: [`--disable-extensions-except=${EXTENSION}`, `--load-extension=${EXTENSION}`],
     });
     try {
-      const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+      const worker = await ydmWorker(context);
       const t = Date.now();
       await (await context.newPage()).goto(server.url).catch(() => {});
       // Saved: the browser finished copying YDM's file into Downloads.
