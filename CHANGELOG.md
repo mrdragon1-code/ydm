@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+### Fixed
+- The YDM logo in the side bar of the downloads and settings page is centred again (the arrow
+  sat beside its square).
+
 ## 1.1.0
 
 ### New
