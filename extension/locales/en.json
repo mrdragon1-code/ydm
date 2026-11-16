@@ -15,7 +15,8 @@
     "show": "Show in folder",
     "open": "Open",
     "details": "Details",
-    "remove": "Remove from list"
+    "remove": "Remove from list",
+    "decide": "Decide"
   },
   "popup": {
     "settings": "Settings",
@@ -55,7 +56,9 @@
     "failedReason": "Failed: {reason}",
     "cancelled": "Cancelled",
     "browser": "Downloaded by the browser",
-    "browserReason": "Downloaded by the browser: {reason}"
+    "browserReason": "Downloaded by the browser: {reason}",
+    "held": "Waiting for you: {reason}",
+    "blocked": "Blocked: {reason}"
   },
   "unit": {
     "B": "B",
@@ -94,7 +97,9 @@
     "saveTooLarge": "file too large for the disk",
     "saveAccessDenied": "Downloads folder not accessible",
     "saveFailed": "saving failed ({error})",
-    "saveFailedPlain": "saving failed"
+    "saveFailedPlain": "saving failed",
+    "blocked": "a known virus: deleted, never saved",
+    "denied": "not downloaded, at your request"
   },
   "settings": {
     "title": "YDM settings",
@@ -133,7 +138,10 @@
     "siteRemoveLabel": "Remove {host}",
     "siteInvalid": "That is not a site address. Type for example mega.nz or www.example.com.",
     "noSites": "No excluded sites.",
-    "reset": "Restore default settings"
+    "reset": "Restore default settings",
+    "files": "Files",
+    "resetConfirm": "Click again to restore",
+    "resetHelp": "Your API keys are kept."
   },
   "downloads": {
     "title": "YDM downloads",
@@ -168,14 +176,22 @@
       "one": "Download {count} file",
       "other": "Download {count} files"
     },
-    "grabEmpty": "No links of the selected types."
+    "grabEmpty": "No links of the selected types.",
+    "filterBlocked": "Blocked",
+    "emptyNone": "No downloads yet",
+    "emptyFiltered": "No matching downloads",
+    "emptyFilteredHelp": "Nothing matches this search and filter.",
+    "showAll": "Show all downloads",
+    "details": "Details"
   },
   "notify": {
     "done": "Download complete",
     "doneBody": "{name} · {size}",
     "failed": "Download failed",
     "show": "Show in folder",
-    "open": "Open"
+    "open": "Open",
+    "suspicious": "A download needs your decision",
+    "blocked": "A virus was blocked"
   },
   "translate": {
     "offer": "Show YDM in {language}? Your browser translates it on this device.",
@@ -187,5 +203,140 @@
   "update": {
     "available": "YDM {version} is available",
     "get": "Get it"
+  },
+  "app": {
+    "nav": "YDM",
+    "skip": "Skip to content",
+    "downloads": "Downloads",
+    "security": "Security",
+    "settings": "Settings",
+    "about": "About",
+    "decide": "Decide",
+    "waiting": {
+      "one": "{count} download waits for your decision",
+      "other": "{count} downloads wait for your decision"
+    }
+  },
+  "about": {
+    "heading": "About YDM",
+    "lead": "A download manager that lives in the browser: faster downloads, checked before they reach your Downloads folder.",
+    "free": "Free and open source. No account, no ads, no paid plan.",
+    "private": "Nothing is sent to YDM's authors: there is no YDM server.",
+    "keys": "Online checks use your own free keys, sent only to the service they belong to.",
+    "source": "Source code and releases",
+    "version": "Version"
+  },
+  "alert": {
+    "suspiciousTitle": "This download looks suspicious",
+    "suspiciousLead": "YDM stopped it before it reached your Downloads folder. Download it only if you trust the site and expected this file.",
+    "blockedTitle": "Virus blocked",
+    "blockedLead": "This file is a known virus. YDM deleted it: nothing reached your Downloads folder.",
+    "file": "File",
+    "site": "Site",
+    "size": "Size",
+    "why": "Why",
+    "details": "Details",
+    "address": "Full address",
+    "checked": "Checked by",
+    "noHash": "not computed yet: stopped before the end",
+    "report": "See the full report on VirusTotal",
+    "deny": "Don't download",
+    "allow": "Download anyway",
+    "ok": "OK, keep it blocked",
+    "notDownloaded": "Not downloaded.",
+    "downloading": "Downloading.",
+    "uncheckedTitle": "This file could not be checked",
+    "uncheckedLead": "YDM is holding it: nothing has reached your Downloads folder. Without the check, download it only if you trust the site and expected this file."
+  },
+  "security": {
+    "heading": "Security",
+    "level": {
+      "clean": "Checked: nothing found",
+      "unknown": "Not verified",
+      "suspicious": "Suspicious",
+      "malicious": "Known virus"
+    },
+    "summary": {
+      "clean": "No check found anything wrong.",
+      "unknown": "The online services could not be reached; only the checks on your device ran.",
+      "suspicious": "Something about this download looks wrong.",
+      "malicious": "This is a known virus."
+    },
+    "source": {
+      "local": "on your device",
+      "virustotal": "VirusTotal",
+      "urlhaus": "URLhaus",
+      "malwarebazaar": "MalwareBazaar"
+    },
+    "local": {
+      "credentials": "the address hides the real site behind a name and password ({host})",
+      "punycode": "the site name uses letters from another alphabet that can imitate a known site ({host})",
+      "ipHost": "the site has no name, only a number ({host}), as is common for malware",
+      "doubleExtension": "“{name}” looks like a .{looks} but is a .{is} program",
+      "disguised": "“{name}” is named like a .{looks} but is actually a program"
+    },
+    "vt": {
+      "fileMalicious": {
+        "one": "{count} antivirus of {total} recognizes this file as a virus",
+        "other": "{count} antivirus engines of {total} recognize this file as a virus"
+      },
+      "fileSuspicious": {
+        "one": "{count} antivirus of {total} flags this file",
+        "other": "{count} antivirus engines of {total} flag this file"
+      },
+      "urlMalicious": {
+        "one": "{count} security service of {total} lists this address as dangerous",
+        "other": "{count} security services of {total} list this address as dangerous"
+      },
+      "urlSuspicious": {
+        "one": "{count} security service of {total} flags this address",
+        "other": "{count} security services of {total} flag this address"
+      }
+    },
+    "timeout": "{service} did not answer in time: the file could not be checked",
+    "urlhaus": {
+      "malware": "URLhaus lists this address as spreading malware"
+    },
+    "bazaar": {
+      "known": "MalwareBazaar lists this exact file as malware",
+      "knownNamed": "MalwareBazaar lists this exact file as malware ({name})"
+    },
+    "status": {
+      "online": "Protected: on your device and online",
+      "onlineHelp": "Every download is checked on your device, and its address and SHA-256 against the services whose key you entered.",
+      "local": "Protected on your device",
+      "localHelp": "Every download is checked on your device. Add a free key below to also recognize known viruses.",
+      "off": "Checks are off",
+      "offHelp": "YDM does not check downloads. The browser's own protection still applies."
+    },
+    "localTitle": "On your device",
+    "scanLocal": "Check every download",
+    "localHelp": "Looks for fake addresses, a program hiding behind a .pdf or .jpg name, and similar tricks. Nothing leaves your computer.",
+    "ask": "Stop and ask when something looks suspicious",
+    "askHelp": "A small window asks whether to download it. Known viruses are always blocked, whatever this says.",
+    "onlineTitle": "Known viruses (online, optional)",
+    "onlineLead": "With your own free key, YDM asks these services about each download. YDM ships no key and has no server: the key stays in this browser and goes only to its service.",
+    "vtLabel": "VirusTotal",
+    "vtHelp": "About 70 antivirus engines. Free for personal use: 4 checks a minute, 500 a day.",
+    "vtGet": "Get a free key",
+    "acLabel": "abuse.ch (URLhaus and MalwareBazaar)",
+    "acHelp": "Public databases of malware and the addresses that spread it. Free for non-commercial use.",
+    "acGet": "Get a free key",
+    "keyPlaceholder": "Paste your API key",
+    "keyReplace": "Paste a new key to replace it",
+    "keySave": "Save and test",
+    "keyTesting": "Testing…",
+    "keyRemove": "Remove key",
+    "keyOn": "On",
+    "keyOff": "Off",
+    "keyInvalid": "That does not look like an API key. Copy it again from the service's page.",
+    "keyRejected": "The service did not accept this key. Check that it is complete and active.",
+    "consentNeeded": "Firefox needs your permission to send download addresses to this service.",
+    "sentTitle": "What is sent, and what is not",
+    "sent1": "Sent: the download's address and the finished file's SHA-256 fingerprint.",
+    "sent2": "Never sent: the file itself, your cookies, the page you were on.",
+    "sent3": "Answers are remembered for a week, so the same file is not asked about twice.",
+    "historyTitle": "Recent warnings",
+    "historyEmpty": "No suspicious or blocked downloads."
   }
 }

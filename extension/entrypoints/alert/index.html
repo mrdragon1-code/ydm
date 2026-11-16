@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>YDM</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main id="alert" class="alert" aria-labelledby="title" aria-describedby="lead">
+      <div class="body">
+        <header class="head">
+          <span class="level-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path class="shape" d="M12 2.5l8 3v6c0 5-3.6 8.4-8 9.5-4.4-1.1-8-4.5-8-9.5v-6z" />
+              <path id="glyph" class="glyph" d="" />
+            </svg>
+          </span>
+          <h1 id="title"></h1>
+          <p id="lead" class="lead"></p>
+        </header>
+
+        <section class="file" aria-labelledby="fileLabel">
+          <h2 id="fileLabel" class="visually-hidden" data-i18n="alert.file"></h2>
+          <p id="name" class="file-name"></p>
+          <dl class="file-meta">
+            <div>
+              <dt data-i18n="alert.site"></dt>
+              <dd id="site"></dd>
+            </div>
+            <div>
+              <dt data-i18n="alert.size"></dt>
+              <dd id="size" class="num"></dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="why" aria-labelledby="whyTitle">
+          <h2 id="whyTitle" data-i18n="alert.why"></h2>
+          <ul id="reasons" class="reasons"></ul>
+        </section>
+
+        <details id="more" class="more">
+          <summary data-i18n="alert.details"></summary>
+          <dl class="more-facts">
+            <div>
+              <dt data-i18n="alert.address"></dt>
+              <dd id="address" class="wrap"></dd>
+            </div>
+            <div>
+              <dt>SHA-256</dt>
+              <dd>
+                <span id="hash" class="mono wrap"></span>
+                <button id="copy" class="button quiet small" type="button" data-i18n="downloads.copy" hidden></button>
+              </dd>
+            </div>
+            <div>
+              <dt data-i18n="alert.checked"></dt>
+              <dd id="checked"></dd>
+            </div>
+          </dl>
+          <a id="report" class="report" target="_blank" rel="noreferrer noopener" hidden data-i18n="alert.report"></a>
+        </details>
+      </div>
+
+      <footer class="choices" id="choices">
+        <button id="deny" class="button" type="button"></button>
+        <button id="allow" class="button quiet" type="button" data-i18n="alert.allow" hidden></button>
+      </footer>
+      <p id="after" class="after" role="status"></p>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

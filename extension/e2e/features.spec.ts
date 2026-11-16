@@ -85,10 +85,12 @@ test('English by default; Italian when chosen, everywhere at once', async ({ con
   await expect(popup.locator('html')).toHaveAttribute('lang', 'en');
 
   const settings = await context.newPage();
-  await settings.goto(`chrome-extension://${id}/options.html`);
-  await expect(settings.locator('h1')).toHaveText('Settings');
+  await settings.goto(`chrome-extension://${id}/app.html#settings`);
+  await expect(settings.locator('#h-settings')).toHaveText('Settings');
   await settings.getByLabel('Language').selectOption('it');
-  await expect(settings.locator('h1')).toHaveText('Impostazioni');
+  await expect(settings.locator('#h-settings')).toHaveText('Impostazioni');
+  // The other screens change language too.
+  await settings.goto(`chrome-extension://${id}/app.html#security`);
   await expect(settings.getByLabel('Lascia al browser i programmi')).toBeVisible();
   // Every visible text is translated: no message key left on the page.
   const keys = await settings.locator('body').innerText();
@@ -133,8 +135,8 @@ test("other languages are translated by the browser's translator, once, and kept
 
   // Another page uses the stored translation without translating again.
   const settings = await context.newPage();
-  await settings.goto(`chrome-extension://${id}/options.html`);
-  await expect(settings.locator('h1')).toHaveText('[de] Settings');
+  await settings.goto(`chrome-extension://${id}/app.html#settings`);
+  await expect(settings.locator('#h-settings')).toHaveText('[de] Settings');
   expect(await settings.evaluate(() => (globalThis as unknown as { translateCalls: number }).translateCalls)).toBe(0);
   await expect(settings.locator('.translate-offer')).toHaveCount(0);
 });

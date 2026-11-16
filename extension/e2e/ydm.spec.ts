@@ -428,8 +428,10 @@ test('the speed limit holds YDM back', async ({ context, worker, served }) => {
 test('the settings page saves what is changed', async ({ context, worker }) => {
   const id = new URL(worker.url()).host;
   const page = await context.newPage();
-  await page.goto(`chrome-extension://${id}/options.html`);
+  // Moved to the Security screen: what the browser keeps is a safety choice.
+  await page.goto(`chrome-extension://${id}/app.html#security`);
   await page.getByLabel('Leave programs to the browser').uncheck();
+  await page.goto(`chrome-extension://${id}/app.html#settings`);
   await page.getByLabel('Minimum size').selectOption('25');
   await page.getByRole('radio', { name: '5' }).click();
   await page.getByLabel('Site to exclude').fill('https://www.Example.com/file');
@@ -444,9 +446,12 @@ test('the settings page saves what is changed', async ({ context, worker }) => {
   );
   expect(stored).toEqual({ programsToBrowser: false, minSize: 25 * 2 ** 20, parallel: 5, excluded: ['example.com'] });
 
+  // Asks for a second click before restoring.
   await page.getByRole('button', { name: 'Restore default settings' }).click();
-  await expect(page.getByLabel('Leave programs to the browser')).toBeChecked();
+  await page.getByRole('button', { name: 'Click again to restore' }).click();
   await expect(page.locator('#excluded li')).toHaveCount(0);
+  await page.goto(`chrome-extension://${id}/app.html#security`);
+  await expect(page.getByLabel('Leave programs to the browser')).toBeChecked();
 });
 
 test('the popup lists the download and its size', async ({ context, worker, served }) => {
@@ -461,7 +466,7 @@ test('the popup lists the download and its size', async ({ context, worker, serv
   await popup.goto(`chrome-extension://${id}/popup.html`);
   const row = popup.locator('#list li').first();
   // The server's name arrives sanitized and as text, never as markup.
-  await expect(row.locator('.name')).toHaveText('_img src=x onerror=alert(1)_.bin');
+  await expect(row.locator('.name .label')).toHaveText('_img src=x onerror=alert(1)_.bin');
   await expect(popup.locator('img')).toHaveCount(0);
   // Size, time and average speed, to compare with the browser.
   await expect(row.locator('.meta')).toHaveText(/^6\.0 MB · \d+ s · avg [\d.]+ (KB|MB)\/s$/);

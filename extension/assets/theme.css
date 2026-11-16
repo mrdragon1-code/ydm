@@ -1,216 +1,205 @@
-/* Shared by the popup and the settings page.
-   Malachite: the green stone of the Urals, where Mount Yamantau stands.
-   Numbers are set in Martian Mono, bundled: no page of YDM loads anything
-   from the network. */
-@import '@fontsource-variable/martian-mono/wght.css';
+/* YDM design system. Shared by the popup, the app (downloads, settings)
+   and the alert window. System fonts only: no page of YDM loads anything
+   from the network.
+
+   TOKENS (light on :root; dark redefines the colour tokens only)
+     Surfaces   --bg (page ground) --surface (raised: popup, cards, inputs)
+                --surface-2 (hover, wells, quiet strips) --surface-3 (pressed)
+     Text       --text --text-2 (secondary) --text-3 (tertiary, placeholders)
+     Lines      --border --border-strong --track (empty progress)
+     Accent     --accent (progress, primary action, selection, focus)
+                --accent-hover --accent-fg (text on accent) --accent-soft
+     Meaning    --ok --ok-soft  --warn --warn-soft  --danger --danger-soft
+                --unknown (no verdict)
+     Focus      --focus  (use: outline: var(--focus-ring); outline-offset: 2px)
+     Type       --font-sans --font-mono
+                --fs-xs 11 / --fs-sm 12 / --fs-md 13 / --fs-lg 15 / --fs-xl 18 / --fs-2xl 22
+                --lh-tight 1.25 / --lh 1.45
+                --fw-medium 500 / --fw-semibold 600
+     Space      --space-1 4 / -2 8 / -3 12 / -4 16 / -5 24 / -6 32 / -7 48
+     Radius     --radius-sm 4 / --radius 6 / --radius-lg 8 / --radius-full
+     Size       --control-sm 24 / --control 28 / --control-lg 32
+     Shadow     --shadow-sm (a lifted control) --shadow-pop (menus, popovers)
+     Motion     --ease, --dur (150ms; off under prefers-reduced-motion)
+     Legacy aliases, kept so older rules still work: --paper --raised --ink
+     --muted --line --malachite --on-malachite --note --bad --hover
+     --note-soft --bad-soft --sans --mono
+
+   COMPONENTS
+     .mark                 wordmark with the YDM glyph
+     .button               primary; .button.quiet (secondary), .button.danger,
+                           .button.small; works on <a> too
+     .icon                 square icon button, 28px, SVG 16px stroke icons
+     .link                 text button
+     input/textarea/select base field style; .switch (checkbox role=switch)
+     .segmented            radio bar (buttons with aria-checked)
+     .badge                small label; [data-tone=ok|warn|danger|accent]
+     .strip                full-width notice line; .strip.warn, .strip.danger
+     .shield[data-level]   security verdict glyph (clean|suspicious|malicious|unknown)
+     .segbar               progress bar painted from connection ranges
+     .rows > li            a download row (.kind .name .label .shield .segbar
+                           .meta .text .conns .actions), data-state on li
+     .adder .adder-row     paste-links form;  .empty  empty state
+     .status .visually-hidden .translate-offer .attention */
 
 :root {
-  --paper: #fbfcfa;
-  --raised: #ffffff;
-  --ink: #16201c;
-  --muted: #5f6b65;
-  --line: #e2e8e4;
-  --track: #e3ebe5;
-  --malachite: #0e7a55;
-  --on-malachite: #ffffff;
-  --note: #9a5706;
-  --bad: #b9342a;
-  --hover: #eef3ef;
-  --mono: 'Martian Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
-  --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  color-scheme: light dark;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f1f2f5;
+  --surface-3: #e6e8ed;
+  --text: #17191e;
+  --text-2: #565d6b;
+  --text-3: #6f7683;
+  --border: #e3e5ea;
+  --border-strong: #cdd1d9;
+  --track: #e5e7ec;
+  --accent: #2f63d8;
+  --accent-hover: #2654bd;
+  --accent-fg: #ffffff;
+  --accent-soft: #e9effc;
+  --ok: #1b7a4a;
+  --ok-soft: #e6f3eb;
+  --warn: #93530a;
+  --warn-soft: #fcf2e1;
+  --danger: #be3128;
+  --danger-soft: #fcebea;
+  --unknown: #6f7683;
+  --focus: #2f63d8;
+  --shadow-sm: 0 1px 2px rgb(16 20 30 / 0.08);
+  --shadow-pop: 0 1px 2px rgb(16 20 30 / 0.06), 0 6px 20px rgb(16 20 30 / 0.12);
+
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --lh-tight: 1.25;
+  --lh: 1.45;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+  --control-sm: 24px;
+  --control: 28px;
+  --control-lg: 32px;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --dur: 150ms;
+  --focus-ring: 2px solid var(--focus);
+
+  /* Legacy aliases. */
+  --paper: var(--bg);
+  --raised: var(--surface);
+  --ink: var(--text);
+  --muted: var(--text-2);
+  --line: var(--border);
+  --malachite: var(--accent);
+  --on-malachite: var(--accent-fg);
+  --note: var(--warn);
+  --bad: var(--danger);
+  --hover: var(--surface-2);
+  --note-soft: var(--warn-soft);
+  --bad-soft: var(--danger-soft);
+  --sans: var(--font-sans);
+  --mono: var(--font-mono);
+
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #111714;
-    --raised: #18201c;
-    --ink: #e4ebe7;
-    --muted: #8c9a93;
-    --line: #233029;
-    --track: #26342c;
-    --malachite: #3cc592;
-    --on-malachite: #0b130f;
-    --note: #f0b456;
-    --bad: #f07b6f;
-    --hover: #1d2722;
+  :root:not([data-theme='light']) {
+    --bg: #0f1013;
+    --surface: #17191d;
+    --surface-2: #1f2126;
+    --surface-3: #282b31;
+    --text: #e9ebef;
+    --text-2: #a3a9b5;
+    --text-3: #8a909c;
+    --border: #2a2d33;
+    --border-strong: #3b3f47;
+    --track: #2b2e35;
+    --accent: #6d9af8;
+    --accent-hover: #86acfa;
+    --accent-fg: #0a1122;
+    --accent-soft: #1a2438;
+    --ok: #55c590;
+    --ok-soft: #14271d;
+    --warn: #e9ab4f;
+    --warn-soft: #2a2012;
+    --danger: #f27c72;
+    --danger-soft: #2f1817;
+    --unknown: #8a909c;
+    --focus: #6d9af8;
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
   }
 }
 
-* {
+:root[data-theme='dark'] {
+  --bg: #0f1013;
+  --surface: #17191d;
+  --surface-2: #1f2126;
+  --surface-3: #282b31;
+  --text: #e9ebef;
+  --text-2: #a3a9b5;
+  --text-3: #8a909c;
+  --border: #2a2d33;
+  --border-strong: #3b3f47;
+  --track: #2b2e35;
+  --accent: #6d9af8;
+  --accent-hover: #86acfa;
+  --accent-fg: #0a1122;
+  --accent-soft: #1a2438;
+  --ok: #55c590;
+  --ok-soft: #14271d;
+  --warn: #e9ab4f;
+  --warn-soft: #2a2012;
+  --danger: #f27c72;
+  --danger-soft: #2f1817;
+  --unknown: #8a909c;
+  --focus: #6d9af8;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
-  font: 13px/1.45 var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font: var(--fs-md) / var(--lh) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 :focus-visible {
-  outline: 2px solid var(--malachite);
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* The wordmark: three wide mono capitals after a small three-band bar. */
-.mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font: 600 12px/1 var(--mono);
-  letter-spacing: 0.22em;
-  color: var(--ink);
-}
-
-.mark::before {
-  content: '';
-  width: 14px;
-  height: 6px;
-  border-radius: 1px;
-  background: linear-gradient(
-    90deg,
-    var(--malachite) 0 28%,
-    transparent 28% 36%,
-    var(--malachite) 36% 64%,
-    transparent 64% 72%,
-    var(--malachite) 72%
-  );
-}
-
-/* On/off switch drawn on a checkbox. */
-.switch {
-  appearance: none;
-  flex: none;
-  position: relative;
-  width: 30px;
-  height: 18px;
-  border-radius: 9px;
-  background: var(--track);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.switch::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition: transform 0.15s, background 0.15s;
-}
-
-.switch:checked {
-  background: var(--malachite);
-}
-
-.switch:checked::after {
-  transform: translateX(12px);
-  background: var(--on-malachite);
-}
-
-/* The progress bar. While YDM downloads, its background is drawn from the
-   ranges: one band per connection, the gaps are the bytes still missing. */
-.segbar {
-  height: 6px;
-  border-radius: 2px;
-  background-color: var(--track);
-  background-repeat: no-repeat;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
-/* --- Shared controls ------------------------------------------------- */
-
-.icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-/* `display: grid` would otherwise override the hidden attribute. */
-.icon[hidden] {
-  display: none;
-}
-
-.icon:hover,
-.icon[aria-expanded='true'] {
-  background: var(--hover);
-  color: var(--ink);
-}
-
-.icon svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.button {
-  min-height: 32px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--malachite);
-  color: var(--on-malachite);
-  font: 550 13px/1 var(--sans);
-  cursor: pointer;
-}
-
-.button:hover {
-  filter: brightness(1.08);
-}
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: default;
-  filter: none;
-}
-
-.link {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.link:hover {
-  color: var(--ink);
-  text-decoration: underline;
-}
-
-input[type='text'],
-input[type='search'],
-textarea,
-select {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--raised);
-  color: var(--ink);
-  font: inherit;
+::placeholder {
+  color: var(--text-3);
+  opacity: 1;
 }
 
 .visually-hidden {
@@ -222,37 +211,491 @@ select {
   white-space: nowrap;
 }
 
-/* --- A download row (popup and downloads page) ----------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* --- Wordmark ------------------------------------------------------------ */
+
+/* The toolbar icon in small (an arrow into a tray, on the accent), then the
+   name. Drawn in CSS: pages show no images. */
+.mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+  font: var(--fw-semibold) var(--fs-md) / 1 var(--font-sans);
+  letter-spacing: 0.04em;
+}
+
+.mark::before {
+  content: '';
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--accent);
+}
+
+.mark::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-top: -9px;
+  background: var(--accent-fg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4.5v6.5M6 8.2 9 11.2l3-3M5.5 13.5h7'/%3E%3C/svg%3E")
+    center / 18px 18px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4.5v6.5M6 8.2 9 11.2l3-3M5.5 13.5h7'/%3E%3C/svg%3E")
+    center / 18px 18px no-repeat;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-lg);
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: var(--fw-medium) var(--fs-md) / 1 var(--font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.button:hover {
+  background: var(--accent-hover);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.button.quiet {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.button.quiet:hover {
+  background: var(--surface-2);
+}
+
+.button.danger {
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.button.danger:hover {
+  background: color-mix(in srgb, var(--danger) 88%, var(--text));
+}
+
+.button.small {
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+
+/* A square button holding one 16px stroke icon. */
+.icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--control);
+  height: var(--control);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+/* `display: grid` would otherwise override the hidden attribute. */
+.icon[hidden] {
+  display: none;
+}
+
+.icon:hover,
+.icon[aria-expanded='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.icon:active {
+  background: var(--border-strong);
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.link {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* --- Fields -------------------------------------------------------------- */
+
+input[type='text'],
+input[type='search'],
+input[type='url'],
+input[type='number'],
+input[type='password'],
+textarea,
+select {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  transition: border-color var(--dur) var(--ease);
+}
+
+:is(input, textarea, select):hover {
+  border-color: color-mix(in srgb, var(--border-strong) 60%, var(--text-3));
+}
+
+:is(input[type='text'], input[type='search'], input[type='url'], input[type='number'], input[type='password'], textarea, select):focus-visible {
+  outline: 0;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+}
+
+/* On/off switch drawn on a checkbox. */
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background-color var(--dur) var(--ease);
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform var(--dur) var(--ease);
+}
+
+.switch:checked {
+  background: var(--accent);
+}
+
+.switch:checked::after {
+  transform: translateX(14px);
+}
+
+.switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* A segmented choice: radios that look like one bar of buttons. The chosen
+   one is lifted, not coloured: colour is for meaning. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-3);
+}
+
+.segmented button {
+  min-width: 34px;
+  min-height: var(--control);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  font: var(--fw-medium) var(--fs-sm) / 1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button[aria-checked='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+.segmented.mono button {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+/* --- Small pieces -------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font: var(--fw-medium) var(--fs-xs) / 1 var(--font-sans);
+  white-space: nowrap;
+}
+
+.badge[data-tone='ok'] {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge[data-tone='warn'] {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.badge[data-tone='danger'] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge[data-tone='accent'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* A short status line. */
+.status {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+/* A full-width notice line, between a header and a list. */
+.strip,
+.translate-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: 6px var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-tight);
+}
+
+:is(.strip, .translate-offer)[hidden] {
+  display: none;
+}
+
+:is(.strip, .translate-offer, .attention) .button {
+  flex: none;
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+
+.strip.warn,
+.attention {
+  background: var(--warn-soft);
+}
+
+.strip.danger {
+  background: var(--danger-soft);
+}
+
+/* A banner that something needs your attention. */
+.attention {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+
+.attention[hidden] {
+  display: none;
+}
+
+/* --- Security shield ----------------------------------------------------- */
+
+/* Beside a download's name: its colour, its mark, and words for screen
+   readers, so the level is never told by colour alone. */
+.shield {
+  flex: none;
+  display: inline-grid;
+  width: 14px;
+  height: 14px;
+}
+
+.shield[hidden] {
+  display: none;
+}
+
+.shield svg {
+  width: 14px;
+  height: 14px;
+}
+
+.shield svg path:first-child {
+  fill: var(--shield, var(--unknown));
+}
+
+.shield .mark-path {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.shield[data-level='clean'] {
+  --shield: var(--ok);
+}
+
+.shield[data-level='suspicious'] {
+  --shield: var(--warn);
+}
+
+.shield[data-level='malicious'] {
+  --shield: var(--danger);
+}
+
+/* --- Progress ------------------------------------------------------------ */
+
+/* While YDM downloads, the bar is drawn from the ranges: one band per
+   connection, the gaps are the bytes still missing (lib/ui/segbar.ts). */
+.segbar {
+  --segbar-cut: var(--surface);
+  height: 4px;
+  border-radius: var(--radius-full);
+  background-color: var(--track);
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+/* --- A download row (popup and downloads page) --------------------------- */
 
 .rows {
   list-style: none;
 }
 
+/* kind | name     actions
+        | segbar   actions
+        | meta     actions */
 .rows li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 8px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  column-gap: var(--space-3);
   align-items: center;
-  padding: 11px 10px 11px 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 10px var(--space-2) 10px var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* The file's type, the way a file manager shows it. */
+.rows .kind {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text-2);
+  font: var(--fw-semibold) 9px / 1 var(--font-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow: hidden;
 }
 
 .rows .name {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rows .name .label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 550;
+  font-weight: var(--fw-medium);
+  line-height: 18px;
 }
 
 .rows .segbar {
-  margin: 7px 0 6px;
+  grid-column: 2;
+  margin: 6px 0 5px;
 }
 
 .rows .meta {
+  grid-column: 2;
   display: flex;
-  gap: 8px;
-  color: var(--muted);
-  font: 11px/1.5 var(--mono);
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -266,53 +709,97 @@ select {
 
 .rows .meta .conns {
   flex: none;
+  color: var(--text-3);
 }
 
 .rows li .actions {
-  grid-row: 1 / span 3;
-  grid-column: 2;
-  align-self: start;
+  grid-column: 3;
+  grid-row: 1 / -1;
+  align-self: center;
   display: flex;
   gap: 2px;
 }
 
-.rows li[data-state='paused'] .segbar {
-  opacity: 0.55;
-}
-
-.rows li[data-state='completed'] .segbar {
-  background-color: var(--malachite);
-}
-
-.rows li[data-state='failed'] .meta {
-  color: var(--bad);
-}
-
-.rows li[data-state='browser'] .meta {
-  color: var(--note);
-}
-
-/* A reason is worth reading in full, and in the body face. */
-.rows li:is([data-state='failed'], [data-state='browser']) .meta .text {
-  white-space: normal;
-  font-family: var(--sans);
-  font-size: 12px;
-}
-
-.rows li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .segbar {
+/* Without a bar, name and meta sit closer. */
+.rows li:not([data-state='running'], [data-state='paused'], [data-state='queued']) .segbar {
   display: none;
 }
 
-.rows li:is([data-state='failed'], [data-state='cancelled'], [data-state='browser']) .name {
-  margin-bottom: 3px;
+.rows li:not([data-state='running'], [data-state='paused'], [data-state='queued']) .name {
+  margin-bottom: 2px;
 }
 
-.rows li[data-state='cancelled'] .name {
-  color: var(--muted);
+.rows li[data-state='paused'] .segbar {
+  opacity: 0.5;
 }
 
+.rows li[data-state='queued'] .segbar {
+  opacity: 0.5;
+}
+
+.rows li[data-state='completed'] .kind {
+  color: var(--text);
+}
+
+.rows li[data-state='failed'] .meta,
+.rows li[data-state='blocked'] .meta {
+  color: var(--danger);
+}
+
+.rows li:is([data-state='browser'], [data-state='held']) .meta {
+  color: var(--warn);
+}
+
+.rows li:is([data-state='failed'], [data-state='blocked']) .kind {
+  background: var(--danger-soft);
+  box-shadow: none;
+  color: var(--danger);
+}
+
+.rows li[data-state='browser'] .kind {
+  background: var(--warn-soft);
+  box-shadow: none;
+  color: var(--warn);
+}
+
+.rows li[data-state='held'] .kind {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent);
+  color: var(--warn);
+}
+
+/* A reason is worth reading in full. */
+.rows li:is([data-state='failed'], [data-state='browser'], [data-state='held'], [data-state='blocked']) .meta .text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.rows li[data-state='cancelled'] :is(.name, .kind) {
+  color: var(--text-3);
+}
+
+.rows li[data-state='cancelled'] .name .label {
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+
+/* The one thing waiting for you. */
+.rows li[data-state='held'] {
+  background: color-mix(in srgb, var(--warn-soft) 70%, transparent);
+}
+
+.rows li[data-state='held'] .actions .icon {
+  background: var(--warn);
+  color: var(--surface);
+}
+
+.rows li[data-state='held'] .actions .icon:hover {
+  background: color-mix(in srgb, var(--warn) 85%, var(--text));
+}
+
+/* Unknown size: a short band sweeps the track. */
 .rows li.indeterminate .segbar {
-  background-image: linear-gradient(90deg, transparent 0 35%, var(--malachite) 35% 65%, transparent 65%);
+  background-image: linear-gradient(90deg, transparent 0 35%, var(--accent) 35% 65%, transparent 65%);
   background-size: 50% 100%;
   animation: sweep 1.3s linear infinite;
 }
@@ -326,14 +813,59 @@ select {
   }
 }
 
-/* Offer to translate YDM with the browser's translator. */
-.translate-offer {
+/* --- Paste-links form, shared by the popup and the app ------------------- */
+
+.adder {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.adder[hidden] {
+  display: none;
+}
+
+.adder textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 6px var(--space-2);
+  resize: vertical;
+  font: var(--fs-sm) / 1.5 var(--font-mono);
+}
+
+.adder-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--hover);
-  font-size: 12px;
+  gap: var(--space-3);
+}
+
+.adder-row .button {
+  min-height: var(--control);
+}
+
+/* --- Empty state --------------------------------------------------------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-6) var(--space-5);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.empty[hidden] {
+  display: none;
+}
+
+.rows .kind svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
 }

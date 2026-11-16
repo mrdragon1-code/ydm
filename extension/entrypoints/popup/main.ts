@@ -1,5 +1,5 @@
 import { t } from '@/lib/i18n';
-import { parseUrls } from '@/lib/links';
+import { wireAdder } from '@/lib/ui/adder';
 import { bytes, speed } from '@/lib/ui/format';
 import { createRow, type Row, syncList } from '@/lib/ui/row';
 import { connect, isActive, type View } from '@/lib/ui/store';
@@ -24,37 +24,29 @@ const POPUP_ITEMS = 30;
 const send = connect(render);
 const rows = new Map<number, Row>();
 
+/** A screen of the app, in a tab; the popup closes. */
+function openApp(screen: string) {
+  void browser.tabs.create({ url: browser.runtime.getURL(`/app.html#${screen}`) });
+  window.close();
+}
+
+/** The warning window of a held download: it asks the question. */
+function openAlert(id: number) {
+  void browser.windows
+    .create({ url: browser.runtime.getURL(`/alert.html#${id}`), type: 'popup', width: 440, height: 560 })
+    .catch(() => void browser.tabs.create({ url: browser.runtime.getURL(`/alert.html#${id}`) }));
+  window.close();
+}
+
 toggle.addEventListener('change', () => send({ type: 'enabled', value: toggle.checked }));
 clear.addEventListener('click', () => send({ type: 'clear' }));
-$('settings').addEventListener('click', () => {
-  void browser.runtime.openOptionsPage();
-  window.close();
+$('settings').addEventListener('click', () => openApp('settings'));
+$('all').addEventListener('click', () => openApp('downloads'));
+$('attentionOpen').addEventListener('click', () => {
+  const id = Number($('attention').dataset.id);
+  if (id) openAlert(id);
 });
-$('all').addEventListener('click', () => {
-  void browser.tabs.create({ url: browser.runtime.getURL('/downloads.html') });
-  window.close();
-});
-
-addButton.addEventListener('click', () => {
-  adder.hidden = !adder.hidden;
-  addButton.setAttribute('aria-expanded', String(!adder.hidden));
-  if (!adder.hidden) urls.focus();
-});
-adder.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const found = parseUrls(urls.value);
-  if (!found.length) {
-    addStatus.textContent = t('popup.addInvalid');
-    return;
-  }
-  send({ type: 'urls', urls: found });
-  urls.value = '';
-  addStatus.textContent = t('popup.addDone', { count: found.length });
-});
-// Ctrl/Cmd+Enter sends, Enter alone makes a new line.
-urls.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) adder.requestSubmit();
-});
+wireAdder(addButton, adder, urls, addStatus, send);
 
 $('grab').addEventListener('click', async () => {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -63,8 +55,7 @@ $('grab').addEventListener('click', async () => {
     notice.hidden = false;
     return;
   }
-  void browser.tabs.create({ url: browser.runtime.getURL(`/downloads.html#grab=${tab.id}`) });
-  window.close();
+  openApp(`downloads/grab=${tab.id}`);
 });
 
 function render(view: View) {
@@ -76,11 +67,23 @@ function render(view: View) {
   }
   toggle.checked = view.enabled;
   off.hidden = view.enabled;
+  // Something waiting for a decision comes first, above everything else.
+  const held = view.items.filter((i) => i.state === 'held');
+  const attention = $('attention');
+  attention.hidden = !held.length;
+  if (held.length) {
+    $('attentionText').textContent = t('app.waiting', { count: held.length });
+    attention.dataset.id = String(held[0]!.id);
+  }
   syncList(
     list,
     rows,
     view.items.slice(0, POPUP_ITEMS),
-    (id) => createRow(id, (kind, item) => send({ type: kind === 'open' ? 'show' : kind, id: item })),
+    (id) =>
+      createRow(id, (kind, item) => {
+        if (kind === 'decide') openAlert(item);
+        else send({ type: kind === 'open' ? 'show' : kind, id: item });
+      }),
     view.changed,
   );
   empty.hidden = view.items.length > 0;
@@ -90,9 +93,10 @@ function render(view: View) {
   const running = view.items.filter((i) => i.state === 'running');
   const total = running.reduce((n, i) => n + i.speed, 0);
   const queued = view.items.filter((i) => i.state === 'queued').length;
+  // The total speed first: when the line is cut short, the counts go.
   const parts: string[] = [];
+  if (total > 0) parts.push(speed(total));
   if (running.length) parts.push(t('popup.running', { count: running.length }));
   if (queued) parts.push(t('popup.queued', { count: queued }));
-  if (total > 0) parts.push(speed(total));
   summary.textContent = parts.join(' · ');
 }

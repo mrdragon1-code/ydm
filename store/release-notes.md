@@ -4,7 +4,7 @@
 |---|---|
 | **Windows** | Download **`YDM-Setup-{version}.exe`**, run it, tick Firefox and/or Chrome. No administrator rights; uninstall from *Settings → Apps*. |
 | **Firefox** (140+) | Open **`ydm-{version}-firefox.xpi`** in Firefox and click *Add*. Signed by Mozilla; **updates itself**. |
-| **Chrome, Edge, Brave** | Unzip **`ydm-{version}-chrome.zip`**, open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked*, choose the folder. Chrome cannot update it by itself: YDM's popup tells you when a new version is out. |
+| **Chrome, Edge, Brave** | Unzip **`ydm-{version}-chrome.zip`**, open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked*, choose the folder. Installed with `YDM-Setup-{version}.exe`, it **updates itself** (a scheduled task fetches new releases; YDM reloads when idle). Loaded by hand, its popup tells you when a new version is out. |
 
 ## What YDM does
 
@@ -39,6 +39,6 @@ Good to know: the extra speed comes from servers that limit each connection. On 
 
 - **Windows**: scarica **`YDM-Setup-{version}.exe`**, avvialo e scegli Firefox e/o Chrome. Non servono permessi di amministratore.
 - **Firefox**: apri **`ydm-{version}-firefox.xpi`** in Firefox e clicca *Aggiungi*. Si aggiorna da solo.
-- **Chrome, Edge, Brave**: estrai **`ydm-{version}-chrome.zip`**, apri `chrome://extensions`, attiva *Modalità sviluppatore*, clicca *Carica estensione non pacchettizzata* e scegli la cartella.
+- **Chrome, Edge, Brave**: estrai **`ydm-{version}-chrome.zip`**, apri `chrome://extensions`, attiva *Modalità sviluppatore*, clicca *Carica estensione non pacchettizzata* e scegli la cartella. Con l'installer per Windows si aggiorna da solo.
 
 **Cosa fa:** download a pezzi paralleli, molto più veloci sui siti che limitano ogni connessione · connessioni adattive · non perde mai un download (se un sito rifiuta YDM, scarica il browser) · riprende dopo la chiusura del browser · pausa, riprendi, limite di velocità · SHA-256 di ogni file · pagina Download con ricerca e filtri · incolla link o scarica tutti i link di una pagina · notifica a fine download · nessun account, nessuna statistica.

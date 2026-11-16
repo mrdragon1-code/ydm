@@ -3,7 +3,7 @@ import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
 import { pickLocale, setLocale, t, useMachineTranslations } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
 import { cachedTranslation } from '@/lib/translate';
-import { type Available, CHECK_EVERY_MS, latestRelease, updatesItself } from '@/lib/updates';
+import { type Available, CHECK_EVERY_MS, isNewer, latestRelease, updatesItself } from '@/lib/updates';
 import { bytes } from '@/lib/ui/format';
 
 // Translations made by a page with the browser's translator; the
@@ -14,12 +14,16 @@ import {
   DEFAULT_SETTINGS,
   describeSaveError,
   isProgram,
+  publicSettings,
   readSettings,
   SETTING_KEYS,
   type Settings,
+  scansOnline,
   shouldIntercept,
 } from '@/lib/policy';
 import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } from '@/lib/protocol';
+import { Scanner } from '@/lib/scanner';
+import { incomplete, type Verdict } from '@/lib/security';
 
 /** The engine page is closed after this long with nothing to do. */
 const IDLE_CLOSE_MS = 30_000;
@@ -59,6 +63,14 @@ interface Entry extends Item {
   connectionsSent?: number;
   /** Host the file comes from, after redirects. */
   host?: string;
+  /** The address after redirects, the one the checks looked at. */
+  finalUrl?: string;
+  /** Allowed by the user despite a warning: not asked again. */
+  allowed?: boolean;
+  /** Being stopped because the address is a known virus. */
+  blocking?: boolean;
+  /** Being stopped, file kept, to ask the user. */
+  holding?: boolean;
 }
 
 export default defineBackground(() => {
@@ -83,6 +95,7 @@ export default defineBackground(() => {
   let persistTimer: ReturnType<typeof setTimeout> | undefined;
 
   const link = createLink(onEngineEvent);
+  const scanner = new Scanner();
 
   // The list survives a service worker restart and the browser being closed.
   const restored = (async () => {
@@ -108,11 +121,13 @@ export default defineBackground(() => {
       items.set(entry.id, entry);
     }
     if (resumed.length) {
-      const paused = [...items.values()].filter((i) => i.state === 'paused').map((i) => i.id);
+      // Held ones keep their file too: "Download anyway" still needs it.
+      const paused = [...items.values()].filter((i) => i.state === 'paused' || i.state === 'held').map((i) => i.id);
       await link.send({ type: 'prune', keep: [...resumed, ...paused] });
     }
     pump();
     void checkForUpdate();
+    void checkInstalledVersion();
     // Referer rules of downloads that are no longer running.
     const rules = await browser.declarativeNetRequest.getSessionRules().catch(() => []);
     const stale = rules.map((r) => r.id).filter((id) => !isActive(items.get(id) ?? { state: 'failed' } as Item));
@@ -128,7 +143,9 @@ export default defineBackground(() => {
     const next: Record<string, unknown> = { ...settings };
     for (const key of SETTING_KEYS) if (changes[key]) next[key] = changes[key].newValue;
     const languageChanged = next.language !== settings.language;
+    const keysChanged = next.virusTotalKey !== settings.virusTotalKey || next.abuseChKey !== settings.abuseChKey;
     settings = readSettings(next);
+    if (keysChanged) void scanner.forget();
     if (languageChanged) void applyLanguage();
     // More downloads at once may now start.
     void restored.then(() => {
@@ -157,7 +174,15 @@ export default defineBackground(() => {
       name: baseName(d.filename),
       mime: d.mime,
     };
-    if (!shouldIntercept(candidate, settings)) return;
+    if (!shouldIntercept(candidate, settings)) {
+      // The ones the browser keeps (small files, programs, excluded sites):
+      // their address is checked while the browser downloads them. Not
+      // those YDM handed back: they were checked already.
+      if (!ours && !d.incognito && settings.enabled && d.state === 'in_progress' && /^https?:/i.test(url)) {
+        void guardBrowserDownload(d, url);
+      }
+      return;
+    }
     try {
       await browser.downloads.cancel(d.id);
     } catch {
@@ -191,7 +216,7 @@ export default defineBackground(() => {
 
   /** The downloads page, listing the links of `tab` to pick from. */
   function openGrab(tabId: number) {
-    void browser.tabs.create({ url: browser.runtime.getURL(`/downloads.html#grab=${tabId}`) });
+    void browser.tabs.create({ url: browser.runtime.getURL(`/app.html#downloads/grab=${tabId}`) });
   }
 
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -254,6 +279,11 @@ export default defineBackground(() => {
           resume: item.checkpoint,
           limit: item.limitSent,
           checksum: settings.checksum,
+          // Checked before the browser saves it; a file allowed by the user
+          // after a warning about it is not held again.
+          inspect: scans() && !(item.allowed && item.heldAt === 'file'),
+          // Online lookups ask by hash: only then is it needed before saving.
+          hashFirst: scansOnline(settings),
         });
       })();
     }
@@ -353,7 +383,13 @@ export default defineBackground(() => {
           void setReferrer(item, [item.url, event.url]);
         }
         item.host = hostOf(event.url);
+        item.finalUrl = event.url;
+        // The address is checked while the first bytes arrive.
+        if (scans() && !item.allowed) void checkLink(item, event.url);
         break;
+      case 'inspected':
+        void checkFile(item, event.name, event.sha256, new Uint8Array(event.head));
+        return;
       case 'capped': {
         // The server refused more connections: remembered for this host.
         const host = item.host ?? hostOf(item.url);
@@ -386,7 +422,8 @@ export default defineBackground(() => {
         item.state = 'saving';
         item.done = item.total ?? item.done;
         item.speed = 0;
-        if (settings.checksum) item.sha256 = 'pending';
+        // A file checked before delivery already has its hash.
+        if (settings.checksum && (!item.sha256 || item.sha256 === 'pending')) item.sha256 = 'pending';
         void save(item, event.blobUrl, event.name);
         break;
       case 'hashed':
@@ -406,7 +443,13 @@ export default defineBackground(() => {
         break;
       case 'cancelled':
         clearReferrer(item.id);
-        if (item.toBrowser) {
+        if (item.blocking) {
+          item.blocking = false;
+          block(item);
+        } else if (item.holding) {
+          item.holding = false;
+          hold(item, 'link');
+        } else if (item.toBrowser) {
           item.reason = item.toBrowser;
           handBack(item.url);
           item.state = 'browser';
@@ -426,6 +469,218 @@ export default defineBackground(() => {
     pump();
     update(item.id);
   }
+
+  // --- security ---------------------------------------------------------------
+
+  /** Whether any check runs: on the device, or online with a key. */
+  function scans(): boolean {
+    return settings.scanLocal || scansOnline(settings);
+  }
+
+  /** The download's address, as soon as the real one is known. A known
+   * virus is stopped at once; a suspicious one stops and asks. */
+  async function checkLink(item: Entry, url: string) {
+    const verdict = await scanner.link(url, settings);
+    if (item.state !== 'running' || item.finalUrl !== url) return; // moved on meanwhile
+    item.security = verdict;
+    if (verdict.level === 'malicious') {
+      item.blocking = true;
+      void link.send({ type: 'cancel', id: item.id });
+    } else if (mustAsk(verdict)) {
+      // Kept, like a pause: "Download anyway" goes on from here.
+      item.holding = true;
+      void link.send({ type: 'cancel', id: item.id, keep: true });
+    }
+    update(item.id);
+  }
+
+  /** The finished file, still in YDM's storage. Nothing reaches the
+   * Downloads folder before this says so. */
+  async function checkFile(item: Entry, name: string, sha256: string | null, head: Uint8Array) {
+    const verdict = await scanner.file(name, sha256, head, settings);
+    // The link may already have been flagged: the worse of the two counts.
+    item.security = merge(item.security, verdict);
+    if (sha256) item.sha256 = sha256;
+    const level = item.security.level;
+    if (level === 'malicious') {
+      block(item);
+    } else if (mustAsk(item.security) && !item.allowed) {
+      hold(item, 'file');
+    } else {
+      deliver(item, name);
+    }
+    update(item.id);
+  }
+
+  /** Suspicious, or not checked because a service ran out of time: the
+   * user decides, unless they chose not to be asked. */
+  function mustAsk(verdict: Verdict): boolean {
+    return settings.askOnSuspicious && (verdict.level === 'suspicious' || incomplete(verdict.findings));
+  }
+
+  /** The checked file goes to the browser; hashed meanwhile if not yet. */
+  function deliver(item: Entry, name: string) {
+    const hashed = !!item.sha256 && item.sha256 !== 'pending';
+    void link.send({ type: 'deliver', id: item.id, name, checksum: settings.checksum && !hashed });
+  }
+
+  function merge(a: Verdict | undefined, b: Verdict): Verdict {
+    if (!a) return b;
+    const order = ['clean', 'unknown', 'suspicious', 'malicious'];
+    const level = order.indexOf(a.level) >= order.indexOf(b.level) ? a.level : b.level;
+    return {
+      level,
+      // The same address checked twice gives the same findings: once each.
+      findings: [...a.findings, ...b.findings].filter(
+        (f, i, all) => all.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i,
+      ),
+      checked: [...new Set([...a.checked, ...b.checked])],
+      sha256: b.sha256 ?? a.sha256,
+      at: b.at,
+    };
+  }
+
+  /** A known virus: deleted, never saved, and the user is told why. */
+  function block(item: Entry) {
+    clearReferrer(item.id);
+    void link.send({ type: 'release', id: item.id });
+    item.state = 'blocked';
+    item.speed = 0;
+    item.checkpoint = undefined;
+    item.reason = { key: 'reason.blocked' };
+    warn(item);
+  }
+
+  /** Suspicious: set aside until the user answers. */
+  function hold(item: Entry, at: 'link' | 'file') {
+    item.state = 'held';
+    item.heldAt = at;
+    item.speed = 0;
+    if (at === 'link' && item.startedAt !== undefined) {
+      item.elapsedBefore = (item.elapsedBefore ?? 0) + Date.now() - item.startedAt;
+      item.startedAt = undefined;
+    }
+    warn(item);
+  }
+
+  /** The user's answer to a warning. */
+  function decideHeld(item: Entry, allow: boolean) {
+    if (item.state !== 'held') return;
+    if (!allow) {
+      void link.send({ type: 'release', id: item.id });
+      item.state = 'cancelled';
+      item.checkpoint = undefined;
+      item.reason = { key: 'reason.denied' };
+      return;
+    }
+    item.allowed = true;
+    if (item.heldAt === 'file') {
+      item.state = 'saving';
+      deliver(item, item.name);
+    } else {
+      // Stopped while downloading: goes on from where it stopped.
+      item.state = 'queued';
+      pump();
+    }
+  }
+
+  /** Downloads that stay with the browser: checked by their address while
+   * the browser fetches them, paused if a check takes long. */
+  async function guardBrowserDownload(d: Browser.downloads.DownloadItem, url: string) {
+    if (!scans()) return;
+    // An online answer takes a moment: the browser waits for it.
+    const paused = scansOnline(settings) && (await browser.downloads.pause(d.id).then(() => true, () => false));
+    const verdict = await scanner.link(url, settings);
+    if (verdict.level !== 'malicious' && !mustAsk(verdict)) {
+      if (paused) await browser.downloads.resume(d.id).catch(() => {});
+      return;
+    }
+    // Too late for a finished small file to be stopped by YDM: the browser
+    // has it; remove it so it is not opened by mistake, and say why.
+    await browser.downloads.cancel(d.id).catch(() => {});
+    const [now] = await browser.downloads.search({ id: d.id }).catch(() => []);
+    if (now?.state === 'complete' && verdict.level === 'malicious') {
+      await browser.downloads.removeFile(d.id).catch(() => {});
+    }
+    if (now?.state === 'complete' && verdict.level !== 'malicious') {
+      // Already saved: the decision is the user's; only warn.
+      record(d, url, verdict, 'completed').downloadId = d.id;
+      return;
+    }
+    await browser.downloads.erase({ id: d.id }).catch(() => {});
+    record(d, url, verdict, verdict.level === 'malicious' ? 'blocked' : 'held');
+  }
+
+  /** A browser download, now in YDM's list because a check stopped it. */
+  function record(d: Browser.downloads.DownloadItem, url: string, verdict: Verdict, state: 'blocked' | 'held' | 'completed'): Entry {
+    const id = ++nextId;
+    const item: Entry = {
+      id,
+      url,
+      finalUrl: url,
+      referrer: d.referrer || undefined,
+      name: sanitize(baseName(d.filename) || fromUrl(url) || ''),
+      state,
+      done: 0,
+      total: d.totalBytes > 0 ? d.totalBytes : null,
+      speed: 0,
+      security: verdict,
+      heldAt: 'link',
+      reason: state === 'blocked' ? { key: 'reason.blocked' } : undefined,
+    };
+    items.set(id, item);
+    trimHistory();
+    if (state !== 'completed') warn(item);
+    update();
+    return item;
+  }
+
+  // The warning window, opened for each download that needs a decision or
+  // was blocked; one at a time per download.
+  const alertWindows = new Map<number, number>();
+
+  function warn(item: Entry) {
+    const verdict = item.security;
+    if (!verdict) return;
+    const title = t(item.state === 'blocked' ? 'notify.blocked' : 'notify.suspicious');
+    void browser.notifications
+      .create(`${ALERT}${item.id}`, {
+        type: 'basic',
+        iconUrl: browser.runtime.getURL('/icon/128.png'),
+        title,
+        message: item.name,
+        requireInteraction: item.state === 'held',
+      } as Browser.notifications.NotificationCreateOptions)
+      .catch(() => {});
+    void openAlert(item.id);
+  }
+
+  async function openAlert(id: number) {
+    const open = alertWindows.get(id);
+    if (open !== undefined) {
+      const ok = await browser.windows.update(open, { focused: true }).catch(() => null);
+      if (ok) return;
+    }
+    const url = browser.runtime.getURL(`/alert.html#${id}`);
+    const win = await browser.windows
+      .create({ url, type: 'popup', width: 440, height: 560, focused: true })
+      .catch(() => null);
+    if (win?.id !== undefined) alertWindows.set(id, win.id);
+    // No window (a browser without them): the notification and the badge remain.
+  }
+
+  browser.windows?.onRemoved.addListener((windowId) => {
+    for (const [id, w] of alertWindows) {
+      if (w !== windowId) continue;
+      alertWindows.delete(id);
+      // Closing the warning without answering means "do not download".
+      const item = items.get(id);
+      if (item?.state === 'held') {
+        decideHeld(item, false);
+        update(id);
+      }
+    }
+  });
 
   /** The browser copies the finished file into Downloads, choosing the final
    * name and applying Mark-of-the-Web and Safe Browsing like any download. */
@@ -500,6 +755,8 @@ export default defineBackground(() => {
   // --- notifications ------------------------------------------------------
 
   const NOTIFICATION = 'ydm-';
+  /** Security warnings; a click opens the warning window. */
+  const ALERT = 'ydm-alert-';
 
   function notifyDone(item: Entry) {
     const size = item.total ? bytes(item.total) : '';
@@ -515,6 +772,10 @@ export default defineBackground(() => {
   }
 
   function showFromNotification(notificationId: string) {
+    if (notificationId.startsWith(ALERT)) {
+      void openAlert(Number(notificationId.slice(ALERT.length)));
+      return;
+    }
     if (!notificationId.startsWith(NOTIFICATION)) return;
     const item = items.get(Number(notificationId.slice(NOTIFICATION.length)));
     if (item?.downloadId !== undefined) browser.downloads.show(item.downloadId);
@@ -535,9 +796,12 @@ export default defineBackground(() => {
     if (port.name !== 'popup' || port.sender?.id !== browser.runtime.id) return;
     popups.add(port);
     port.onMessage.addListener((msg) => void onPopup(msg as PopupCommand));
+    // Opening a page is a good moment to look for a new version on disk.
+    void restored.then(checkInstalledVersion);
     port.onDisconnect.addListener(() => {
       popups.delete(port);
       scheduleIdleClose();
+      reloadWhenIdle();
     });
     void restored.then(() => port.postMessage(snapshot(null)));
   });
@@ -590,6 +854,12 @@ export default defineBackground(() => {
           elapsedBefore: undefined,
           checkpoint: undefined,
           toBrowser: undefined,
+          // Checked again from scratch, as a new download.
+          sha256: undefined,
+          security: undefined,
+          heldAt: undefined,
+          allowed: undefined,
+          finalUrl: undefined,
         });
         pump();
         break;
@@ -607,7 +877,7 @@ export default defineBackground(() => {
         break;
       case 'remove': {
         const item = items.get(cmd.id);
-        if (!item || isActive(item)) return;
+        if (!item || isActive(item) || item.state === 'held') return;
         if (item.state === 'paused' || item.checkpoint) void link.send({ type: 'release', id: item.id });
         items.delete(cmd.id);
         notify(cmd.id);
@@ -620,13 +890,21 @@ export default defineBackground(() => {
           enqueue(url, undefined, cmd.referrer);
         }
         return;
+      case 'allow':
+      case 'deny': {
+        const item = items.get(cmd.id);
+        if (!item) return;
+        decideHeld(item, cmd.type === 'allow');
+        void browser.notifications.clear(`${ALERT}${cmd.id}`).catch(() => {});
+        break;
+      }
     }
     update();
   }
 
   /** The whole list (`changed` null), or only the items in `changed`. */
   function snapshot(changed: Set<number> | null): PopupState {
-    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url, sha256, downloadId }: Entry): Item => ({
+    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url, finalUrl, sha256, downloadId, security, heldAt }: Entry): Item => ({
       id,
       name,
       state,
@@ -636,12 +914,20 @@ export default defineBackground(() => {
       reason,
       elapsed,
       parts,
-      url,
+      url: finalUrl ?? url,
       sha256,
       downloadId,
+      security,
+      heldAt,
       resumable: checkpoint !== undefined,
     });
-    const base = { enabled: settings.enabled, minSize: settings.minSize, settings, update: newerRelease ?? undefined };
+    // Pages learn whether a key is set, never the key itself.
+    const base = {
+      enabled: settings.enabled,
+      minSize: settings.minSize,
+      settings: publicSettings(settings),
+      update: newerRelease ?? undefined,
+    };
     if (changed) {
       const list = [...changed].map((id) => items.get(id)).filter((i): i is Entry => !!i);
       const removed = [...changed].filter((id) => !items.has(id));
@@ -674,10 +960,13 @@ export default defineBackground(() => {
     schedulePersist();
     notify(id);
     const active = [...items.values()].filter(isActive).length;
+    // A download waiting for a decision outranks the count: "!" in red.
+    const waiting = [...items.values()].some((i) => i.state === 'held');
     const action = browser.action ?? browser.browserAction;
-    void action.setBadgeText({ text: active ? String(active) : '' });
-    void action.setBadgeBackgroundColor({ color: '#3b6ef5' });
+    void action.setBadgeText({ text: waiting ? '!' : active ? String(active) : '' });
+    void action.setBadgeBackgroundColor({ color: waiting ? '#b9342a' : '#0e7a55' });
     scheduleIdleClose();
+    reloadWhenIdle();
   }
 
   /** Coalesces writes: a burst of state changes costs one write. */
@@ -689,15 +978,53 @@ export default defineBackground(() => {
     }, PERSIST_MS);
   }
 
-  function persist() {
-    void browser.storage.local.set({
-      items: [...items.values()].map(({ sampledAt: _a, sampledDone: _d, parts: _p, ...rest }) =>
-        // Finished downloads have nothing to resume.
-        isActive(rest) || rest.state === 'paused' ? rest : { ...rest, checkpoint: undefined },
-      ),
-      nextId,
-    });
+  function persist(): Promise<void> {
+    return browser.storage.local
+      .set({
+        items: [...items.values()].map(({ sampledAt: _a, sampledDone: _d, parts: _p, ...rest }) =>
+          // Finished downloads have nothing to resume; held ones may go on.
+          isActive(rest) || rest.state === 'paused' || rest.state === 'held' ? rest : { ...rest, checkpoint: undefined },
+        ),
+        nextId,
+      })
+      .catch(() => {});
   }
+
+  // --- self-update of a copy loaded unpacked ---------------------------------
+
+  // Chrome cannot update a copy loaded unpacked. The Windows installer's
+  // scheduled task (installer/update-chrome.ps1) replaces its files with the
+  // latest release, manifest.json last; the running YDM notices the newer
+  // version on disk and reloads itself, once nothing is running or waiting
+  // for an answer and no YDM page is open. The list survives the reload.
+  let reloadPending = false;
+  const RECHECK_ALARM = 'ydm-installed-version';
+
+  async function checkInstalledVersion() {
+    const running = browser.runtime.getManifest();
+    if (updatesItself(running)) return;
+    // (WXT types only its pages; the manifest is there too.)
+    const res = await fetch(browser.runtime.getURL('/manifest.json' as '/popup.html'), { cache: 'no-store' }).catch(() => null);
+    const onDisk = (await res?.json().catch(() => null)) as { version?: string } | null;
+    if (onDisk?.version && isNewer(onDisk.version, running.version)) {
+      reloadPending = true;
+      reloadWhenIdle();
+    }
+  }
+
+  function reloadWhenIdle() {
+    if (!reloadPending || popups.size > 0) return;
+    if ([...items.values()].some((i) => isActive(i) || i.state === 'held')) return;
+    reloadPending = false;
+    clearTimeout(persistTimer);
+    persistTimer = undefined;
+    void persist().then(() => browser.runtime.reload());
+  }
+
+  browser.alarms?.create(RECHECK_ALARM, { periodInMinutes: 30 });
+  browser.alarms?.onAlarm.addListener((alarm) => {
+    if (alarm.name === RECHECK_ALARM) void restored.then(checkInstalledVersion);
+  });
 
   function scheduleIdleClose() {
     clearTimeout(idleTimer);

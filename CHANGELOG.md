@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.1.0
+
+### New
+- Security checks before a file reaches the Downloads folder:
+  - on the device, always on, nothing sent: double extensions (`invoice.pdf.exe`), programs
+    disguised as documents, pictures or videos (by their first bytes), look-alike
+    (punycode) and bare-IP addresses, names and passwords hidden in the address;
+  - online, only with the user's own free key: VirusTotal (file hash and address) and
+    abuse.ch URLhaus / MalwareBazaar. Answers kept for a week; VirusTotal's free limit of
+    four requests a minute respected.
+- A known virus is deleted and never saved; a suspicious download stops and asks in a
+  warning window ("Download anyway" saves the very same file). Small files the browser
+  keeps are checked by their address too.
+- A shield on every download: checked, suspicious, blocked or not checked.
+- One page for Downloads, Security, Settings and About, with its own address per screen
+  (`app.html#settings`); the old pages lead there.
+
+- Chrome, Edge, Brave installed with the Windows installer now **update themselves**: a
+  scheduled task of the user's own fetches each new release from GitHub (SHA-256 checked) and
+  YDM reloads itself with it once no download is running. Firefox already did.
+- A security service that does not answer within 15 seconds no longer leaves a download
+  waiting forever: YDM says the file could not be checked and asks whether to download it.
+
+### Faster
+- Without an online key, a finished file is saved at once: its SHA-256 is computed while the
+  browser saves it, not before (the whole file was read twice in a row).
+
+### Fixed
+- The SHA-256 shown for a checked file no longer stays at "computing…".
+- A download waiting for an answer keeps its file and its progress when the browser restarts,
+  so "Download anyway" still works and goes on where it stopped.
+- The same finding is no longer listed twice when an address is checked twice.
+- Retrying a download checks it again from scratch.
+
 ## 1.0.1
 
 First public release, from GitHub.

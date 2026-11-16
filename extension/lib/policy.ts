@@ -26,6 +26,15 @@ export interface Settings {
   notify: boolean;
   /** SHA-256 of every finished file, shown in the downloads page. */
   checksum: boolean;
+  /** Checks on the device for every download; never sends anything. */
+  scanLocal: boolean;
+  /** The user's own VirusTotal key: asks about the file's SHA-256 and the
+   * address. Empty: never asked. */
+  virusTotalKey: string;
+  /** The user's own abuse.ch key (URLhaus, MalwareBazaar). Empty: never asked. */
+  abuseChKey: string;
+  /** Suspicious downloads stop and ask; off, they are only marked. */
+  askOnSuspicious: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +48,10 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   notify: true,
   checksum: true,
+  scanLocal: true,
+  virusTotalKey: '',
+  abuseChKey: '',
+  askOnSuspicious: true,
 };
 
 export const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
@@ -79,7 +92,28 @@ export function readSettings(stored: Record<string, unknown>): Settings {
       : d.language,
     notify: typeof stored.notify === 'boolean' ? stored.notify : d.notify,
     checksum: typeof stored.checksum === 'boolean' ? stored.checksum : d.checksum,
+    scanLocal: typeof stored.scanLocal === 'boolean' ? stored.scanLocal : d.scanLocal,
+    virusTotalKey: apiKey(stored.virusTotalKey),
+    abuseChKey: apiKey(stored.abuseChKey),
+    askOnSuspicious: typeof stored.askOnSuspicious === 'boolean' ? stored.askOnSuspicious : d.askOnSuspicious,
   };
+}
+
+/** A pasted API key: printable, no spaces, of a sane length; else none. */
+function apiKey(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const key = v.trim();
+  return /^[!-~]{16,128}$/.test(key) ? key : '';
+}
+
+/** Whether any online service will be asked. */
+export function scansOnline(s: Settings): boolean {
+  return Boolean(s.virusTotalKey || s.abuseChKey);
+}
+
+/** Settings for pages: whether a key is set, never the key itself. */
+export function publicSettings(s: Settings): Settings {
+  return { ...s, virusTotalKey: s.virusTotalKey ? '•' : '', abuseChKey: s.abuseChKey ? '•' : '' };
 }
 
 export interface Candidate {

@@ -6,7 +6,7 @@
 import type { Part } from '../protocol';
 
 export function paint(total: number, done: number, parts: Part[] | undefined): string {
-  const fill = 'var(--malachite)';
+  const fill = 'var(--accent)';
   const pct = (n: number) => `${((n / total) * 100).toFixed(3)}%`;
   if (!parts?.length) return `linear-gradient(90deg, ${fill} 0 ${pct(done)}, transparent ${pct(done)})`;
   // What is missing; everything else is on disk (also from before a restart).
@@ -27,7 +27,7 @@ export function paint(total: number, done: number, parts: Part[] | undefined): s
     .filter((start) => start > 0)
     .map(
       (start) =>
-        `linear-gradient(90deg, transparent calc(${pct(start)} - 1px), var(--paper) calc(${pct(start)} - 1px) calc(${pct(start)} + 1px), transparent calc(${pct(start)} + 1px))`,
+        `linear-gradient(90deg, transparent calc(${pct(start)} - 1px), var(--segbar-cut, var(--surface)) calc(${pct(start)} - 1px) calc(${pct(start)} + 1px), transparent calc(${pct(start)} + 1px))`,
     );
   return [...cuts, `linear-gradient(90deg, ${stops.join(', ') || 'transparent 0 100%'})`].join(', ');
 }
