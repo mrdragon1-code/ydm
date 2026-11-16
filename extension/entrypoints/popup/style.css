@@ -1,127 +1,141 @@
 @import '../../assets/theme.css';
 
+/* The popup is one panel: a header, notices, the list, a footer. Every row
+   shares the same 12px side gutter. */
+
 body {
   width: 380px;
+  background: var(--surface);
 }
 
 header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 10px 12px 10px 14px;
-  border-bottom: 1px solid var(--line);
+  gap: 2px;
+  height: 48px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border);
 }
 
 header .mark {
-  margin-right: 6px;
-}
-
-header .switch {
-  margin-left: 6px;
+  margin-right: var(--space-2);
 }
 
 .summary {
   flex: 1;
   min-width: 0;
-  color: var(--muted);
-  font: 11px/1 var(--mono);
-  text-align: right;
-  white-space: nowrap;
+  margin-right: var(--space-2);
   overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   text-overflow: ellipsis;
-  margin-right: 4px;
+  white-space: nowrap;
 }
 
-.adder {
-  display: grid;
-  gap: 8px;
-  padding: 10px 14px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--hover);
+header .divider {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--space-2) 0 6px;
+  background: var(--border);
 }
 
-.adder[hidden] {
-  display: none;
-}
-
-.adder textarea {
-  width: 100%;
-  padding: 8px 10px;
-  resize: vertical;
-  font: 12px/1.5 var(--mono);
-}
-
-.adder-row {
+/* Notices under the header. */
+.strip-text {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.status {
-  color: var(--muted);
-  font-size: 12px;
+.strip-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--warn);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.update {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--hover);
-  font-size: 12px;
-}
-
-.update[hidden] {
-  display: none;
-}
-
-.update .button {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  text-decoration: none;
+.attention {
+  font-weight: var(--fw-medium);
 }
 
 .off,
 .notice {
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  background: var(--hover);
-  color: var(--muted);
-  font-size: 12px;
+  color: var(--text-2);
 }
 
 #list {
-  list-style: none;
   max-height: 440px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
+#list li:last-child {
+  border-bottom: 0;
+}
+
+/* Empty: what YDM does, and how to start. */
 .empty {
-  padding: 26px 22px 22px;
-  text-align: center;
-  color: var(--muted);
+  padding: 36px var(--space-6) 32px;
 }
 
-.empty p:first-child {
-  color: var(--ink);
+.empty-glyph {
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--space-2);
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.empty-title {
+  color: var(--text);
+  font-weight: var(--fw-medium);
 }
 
 .empty .hint {
-  margin-top: 6px;
-  font-size: 12px;
+  max-width: 280px;
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
 }
 
 footer {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-top: 1px solid var(--border);
 }
 
 footer #all {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   margin-left: auto;
+  color: var(--accent);
+  font-weight: var(--fw-medium);
+}
+
+footer #all::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 2.5 8 6l-3.5 3.5'/%3E%3C/svg%3E")
+    center / 12px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 2.5 8 6l-3.5 3.5'/%3E%3C/svg%3E")
+    center / 12px no-repeat;
+}
+
+footer #all:hover {
+  color: var(--accent-hover);
 }

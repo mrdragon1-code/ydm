@@ -71,7 +71,7 @@ try {
   const page = await context.newPage();
   const suffix = `${values.lang}${values.dark ? '-dark' : ''}`;
 
-  await page.goto(`chrome-extension://${id}/downloads.html`);
+  await page.goto(`chrome-extension://${id}/app.html#downloads`);
   await page.locator('#list li').first().waitFor();
   await page.locator('#list li').nth(1).click();
   await page.waitForTimeout(800);
@@ -92,7 +92,7 @@ try {
   );
   await frame.screenshot({ path: path.join(values.out, `popup-${suffix}.png`) });
 
-  await page.goto(`chrome-extension://${id}/options.html`);
+  await page.goto(`chrome-extension://${id}/app.html#settings`);
   await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(values.out, `settings-${suffix}.png`) });
   console.log(`screenshots in ${values.out}`);

@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>YDM</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content" data-i18n="app.skip"></a>
+    <div class="shell">
+      <nav class="nav" data-i18n-label="app.nav">
+        <span class="mark">YDM</span>
+        <ul>
+          <li>
+            <a href="#downloads" data-route="downloads">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10" /></svg>
+              <span class="nav-label" data-i18n="app.downloads"></span>
+              <span id="navCount" class="count"></span>
+            </a>
+          </li>
+          <li>
+            <a href="#security" data-route="security">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l5.5 2v4c0 3.2-2.4 5.4-5.5 6-3.1-.6-5.5-2.8-5.5-6V4z" /></svg>
+              <span class="nav-label" data-i18n="app.security"></span>
+              <span id="navAlert" class="count alert" hidden></span>
+            </a>
+          </li>
+          <li>
+            <a href="#settings" data-route="settings">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6" />
+                <circle cx="10" cy="4.5" r="1.5" />
+                <circle cx="6" cy="11.5" r="1.5" />
+              </svg>
+              <span class="nav-label" data-i18n="app.settings"></span>
+            </a>
+          </li>
+          <li>
+            <a href="#about" data-route="about">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5" /><path d="M8 7.5v3.5M8 5.2v.01" /></svg>
+              <span class="nav-label" data-i18n="app.about"></span>
+            </a>
+          </li>
+        </ul>
+        <label class="power">
+          <span data-i18n="popup.toggle"></span>
+          <input type="checkbox" id="power" class="switch" role="switch" />
+        </label>
+      </nav>
+
+      <main id="content" class="content" tabindex="-1">
+        <div class="notices">
+          <p id="attention" class="notice warn" hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l5 2v3.5c0 3-2.2 5-5 5.5-2.8-.5-5-2.5-5-5.5V4.5zM8 5.5v3M8 10.5v.01" /></svg>
+            <span id="attentionText" class="notice-text"></span>
+            <button id="attentionOpen" class="button small" type="button" data-i18n="app.decide"></button>
+          </p>
+          <p id="update" class="notice" hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5v-8M4.5 9L8 5.5 11.5 9M3 2.5h10" /></svg>
+            <span id="updateText" class="notice-text"></span>
+            <a id="updateLink" class="button quiet small" target="_blank" rel="noreferrer noopener" data-i18n="update.get"></a>
+          </p>
+        </div>
+
+        <!-- Downloads ---------------------------------------------------->
+        <section id="view-downloads" class="view" data-view="downloads" aria-labelledby="h-downloads" hidden>
+          <header class="view-head">
+            <div class="view-title">
+              <h1 id="h-downloads" data-i18n="downloads.heading"></h1>
+              <span id="summary" class="summary" aria-live="polite"></span>
+            </div>
+            <button id="add" class="button quiet" type="button" aria-expanded="false" aria-controls="adder">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
+              <span data-i18n="popup.add"></span>
+            </button>
+          </header>
+
+          <form id="adder" class="adder panel" hidden novalidate>
+            <label for="urls" class="visually-hidden" data-i18n="popup.add"></label>
+            <textarea id="urls" rows="3" spellcheck="false" data-i18n-placeholder="popup.addPlaceholder"></textarea>
+            <div class="adder-row">
+              <span id="addStatus" class="status" role="status"></span>
+              <button type="submit" class="button" data-i18n="popup.addSubmit"></button>
+            </div>
+          </form>
+
+          <section id="grab" class="grab panel" hidden aria-labelledby="grabTitle">
+            <div class="grab-head">
+              <h2 id="grabTitle"></h2>
+              <button id="grabClose" class="icon" type="button" data-i18n-label="action.cancel" data-i18n-title="action.cancel">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
+              </button>
+            </div>
+            <p id="grabMessage" class="status"></p>
+            <div id="grabTypes" class="chips" role="group" data-i18n-label="downloads.grabTypes"></div>
+            <label class="check"><input type="checkbox" id="grabAll" /> <span data-i18n="downloads.grabSelectAll"></span></label>
+            <ul id="grabList" class="picks"></ul>
+            <div class="grab-foot">
+              <button id="grabSubmit" class="button" type="button" disabled></button>
+            </div>
+          </section>
+
+          <div class="layout">
+            <section class="listing panel" data-i18n-label="downloads.heading">
+              <div class="tools">
+                <div class="search">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5l3 3" /></svg>
+                  <label for="search" class="visually-hidden" data-i18n="downloads.search"></label>
+                  <input id="search" type="search" autocomplete="off" spellcheck="false" data-i18n-placeholder="downloads.searchPlaceholder" />
+                </div>
+                <div class="segmented" role="radiogroup" data-i18n-label="downloads.filter" id="filters">
+                  <button type="button" role="radio" data-filter="all" data-i18n="downloads.filterAll"></button>
+                  <button type="button" role="radio" data-filter="active" data-i18n="downloads.filterActive"></button>
+                  <button type="button" role="radio" data-filter="completed" data-i18n="downloads.filterCompleted"></button>
+                  <button type="button" role="radio" data-filter="problems" data-i18n="downloads.filterProblems"></button>
+                  <button type="button" role="radio" data-filter="blocked" data-i18n="downloads.filterBlocked"></button>
+                </div>
+              </div>
+              <ul id="list" class="rows selectable" role="listbox" data-i18n-label="downloads.heading"></ul>
+              <div id="empty" class="empty" hidden>
+                <p id="emptyTitle" class="empty-title"></p>
+                <p id="emptyText" class="empty-text"></p>
+                <button id="emptyReset" class="button quiet small" type="button" data-i18n="downloads.showAll" hidden></button>
+              </div>
+              <footer class="list-foot">
+                <span id="count" class="status"></span>
+                <button id="clear" class="link" type="button" data-i18n="popup.clear"></button>
+              </footer>
+            </section>
+
+            <aside id="details" class="details panel" data-i18n-label="downloads.details">
+              <div id="detailsEmpty" class="details-empty">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z" /><path d="M14 3.5v4h4" /></svg>
+                <p data-i18n="downloads.detailsEmpty"></p>
+              </div>
+              <div id="detailsBody" hidden>
+                <header class="d-head">
+                  <h2 id="dName" class="d-name"></h2>
+                  <p id="dState" class="d-state" aria-live="polite"></p>
+                  <div id="dBar" class="segbar big"></div>
+                </header>
+                <div id="dActions" class="d-actions"></div>
+                <div id="dSecurity" class="d-security" hidden>
+                  <p class="d-security-head"><span id="dShield"></span> <strong id="dLevel"></strong></p>
+                  <ul id="dFindings" class="findings"></ul>
+                </div>
+                <dl class="facts">
+                  <div>
+                    <dt data-i18n="downloads.url"></dt>
+                    <dd><a id="dUrl" class="d-url" target="_blank" rel="noreferrer noopener"></a></dd>
+                  </div>
+                  <div>
+                    <dt data-i18n="downloads.size"></dt>
+                    <dd id="dSize" class="num"></dd>
+                  </div>
+                  <div>
+                    <dt data-i18n="downloads.time"></dt>
+                    <dd id="dTime" class="num"></dd>
+                  </div>
+                  <div>
+                    <dt data-i18n="downloads.avgSpeed"></dt>
+                    <dd id="dSpeed" class="num"></dd>
+                  </div>
+                  <div>
+                    <dt data-i18n="downloads.connections"></dt>
+                    <dd id="dConns" class="num"></dd>
+                  </div>
+                </dl>
+                <section class="d-hash" aria-labelledby="dHashLabel">
+                  <div class="d-hash-head">
+                    <h3 id="dHashLabel" data-i18n="downloads.sha256"></h3>
+                    <button id="dCopy" class="button quiet small" type="button" data-i18n="downloads.copy" hidden></button>
+                  </div>
+                  <p id="dHash" class="mono hash"></p>
+                  <div id="dCompare" class="compare" hidden>
+                    <label for="dCheck" data-i18n="downloads.compare"></label>
+                    <input id="dCheck" type="text" spellcheck="false" autocomplete="off" />
+                    <p id="dVerdict" class="verdict" role="status"></p>
+                  </div>
+                </section>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- Security ----------------------------------------------------->
+        <section id="view-security" class="view narrow" data-view="security" aria-labelledby="h-security" hidden>
+          <header class="view-head">
+            <div class="view-title">
+              <h1 id="h-security" data-i18n="security.heading"></h1>
+            </div>
+          </header>
+
+          <div id="secStatus" class="sec-status panel">
+            <span id="secShield" class="big-shield" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2.5l8 3v6c0 5-3.6 8.4-8 9.5-4.4-1.1-8-4.5-8-9.5v-6z" /><path class="tick" d="M8.5 12l2.5 2.5 4.5-5" /></svg>
+            </span>
+            <div>
+              <h2 id="secTitle" class="sec-title"></h2>
+              <p id="secText" class="help"></p>
+            </div>
+          </div>
+
+          <section class="group" aria-labelledby="h-sec-local">
+            <h2 id="h-sec-local" class="group-title" data-i18n="security.localTitle"></h2>
+            <div class="panel">
+              <div class="row">
+                <label for="scanLocal" data-i18n="security.scanLocal"></label>
+                <input type="checkbox" id="scanLocal" class="switch" role="switch" aria-describedby="scanLocalHelp" />
+                <p id="scanLocalHelp" class="help" data-i18n="security.localHelp"></p>
+              </div>
+              <div class="row">
+                <label for="askOnSuspicious" data-i18n="security.ask"></label>
+                <input type="checkbox" id="askOnSuspicious" class="switch" role="switch" aria-describedby="askHelp" />
+                <p id="askHelp" class="help" data-i18n="security.askHelp"></p>
+              </div>
+              <div class="row">
+                <label for="programsToBrowser" data-i18n="settings.programs"></label>
+                <input type="checkbox" id="programsToBrowser" class="switch" role="switch" aria-describedby="programsHelp" />
+                <p id="programsHelp" class="help" data-i18n="settings.programsHelp"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="h-sec-online">
+            <h2 id="h-sec-online" class="group-title" data-i18n="security.onlineTitle"></h2>
+            <p class="help group-lead" data-i18n="security.onlineLead"></p>
+
+            <div class="panel">
+              <form class="key" id="vtForm" data-service="virusTotal" novalidate>
+                <div class="key-head">
+                  <label for="vtKey" data-i18n="security.vtLabel"></label>
+                  <span id="vtState" class="badge"></span>
+                </div>
+                <p class="help" id="vtHelp">
+                  <span data-i18n="security.vtHelp"></span>
+                  <a class="inline-link" href="https://www.virustotal.com/gui/my-apikey" target="_blank" rel="noreferrer noopener" data-i18n="security.vtGet"></a>
+                </p>
+                <div class="key-row">
+                  <input id="vtKey" type="password" autocomplete="off" spellcheck="false" aria-describedby="vtHelp vtError" data-i18n-placeholder="security.keyPlaceholder" />
+                  <button type="submit" class="button quiet" data-i18n="security.keySave"></button>
+                </div>
+                <p id="vtError" class="error" role="alert"></p>
+                <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
+              </form>
+
+              <form class="key" id="acForm" data-service="abuseCh" novalidate>
+                <div class="key-head">
+                  <label for="acKey" data-i18n="security.acLabel"></label>
+                  <span id="acState" class="badge"></span>
+                </div>
+                <p class="help" id="acHelp">
+                  <span data-i18n="security.acHelp"></span>
+                  <a class="inline-link" href="https://auth.abuse.ch/" target="_blank" rel="noreferrer noopener" data-i18n="security.acGet"></a>
+                </p>
+                <div class="key-row">
+                  <input id="acKey" type="password" autocomplete="off" spellcheck="false" aria-describedby="acHelp acError" data-i18n-placeholder="security.keyPlaceholder" />
+                  <button type="submit" class="button quiet" data-i18n="security.keySave"></button>
+                </div>
+                <p id="acError" class="error" role="alert"></p>
+                <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
+              </form>
+            </div>
+
+            <div class="privacy">
+              <h3 data-i18n="security.sentTitle"></h3>
+              <ul>
+                <li data-i18n="security.sent1"></li>
+                <li data-i18n="security.sent2"></li>
+                <li data-i18n="security.sent3"></li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="h-sec-history">
+            <h2 id="h-sec-history" class="group-title" data-i18n="security.historyTitle"></h2>
+            <div class="panel history">
+              <ul id="history" class="rows"></ul>
+              <p id="historyEmpty" class="panel-empty" data-i18n="security.historyEmpty"></p>
+            </div>
+          </section>
+        </section>
+
+        <!-- Settings ----------------------------------------------------->
+        <section id="view-settings" class="view narrow" data-view="settings" aria-labelledby="h-settings" hidden>
+          <header class="view-head">
+            <div class="view-title">
+              <h1 id="h-settings" data-i18n="settings.heading"></h1>
+              <span id="status" class="saved" role="status"></span>
+            </div>
+          </header>
+
+          <section class="group" aria-labelledby="when">
+            <h2 id="when" class="group-title" data-i18n="settings.when"></h2>
+            <div class="panel">
+              <div class="row">
+                <label for="enabled" data-i18n="settings.enabled"></label>
+                <input type="checkbox" id="enabled" class="switch" role="switch" aria-describedby="enabledHelp" />
+                <p id="enabledHelp" class="help" data-i18n="settings.enabledHelp"></p>
+              </div>
+              <div class="row">
+                <label for="minSize" data-i18n="settings.minSize"></label>
+                <select id="minSize" aria-describedby="minSizeHelp"></select>
+                <p id="minSizeHelp" class="help" data-i18n="settings.minSizeHelp"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="sites">
+            <h2 id="sites" class="group-title" data-i18n="settings.sites"></h2>
+            <p class="help group-lead" data-i18n="settings.sitesHelp"></p>
+            <div class="panel">
+              <form id="addSite" class="add" novalidate>
+                <label for="site" class="visually-hidden" data-i18n="settings.siteLabel"></label>
+                <input id="site" type="text" inputmode="url" autocomplete="off" spellcheck="false" aria-describedby="siteError" data-i18n-placeholder="settings.sitePlaceholder" />
+                <button type="submit" class="button quiet" data-i18n="settings.siteAdd"></button>
+                <p id="siteError" class="error" role="alert"></p>
+              </form>
+              <ul id="excluded" class="sites"></ul>
+              <p id="noSites" class="panel-empty" data-i18n="settings.noSites"></p>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="speed">
+            <h2 id="speed" class="group-title" data-i18n="settings.speed"></h2>
+            <div class="panel">
+              <div class="row range">
+                <label for="connections" data-i18n="settings.connections"></label>
+                <output id="connectionsValue" for="connections" class="value"></output>
+                <input type="range" id="connections" min="1" max="6" step="1" aria-describedby="connectionsHelp" />
+                <div id="preview" class="segbar preview" aria-hidden="true"></div>
+                <p id="connectionsHelp" class="help" data-i18n="settings.connectionsHelp"></p>
+              </div>
+              <div class="row">
+                <span class="label" id="parallelLabel" data-i18n="settings.parallel"></span>
+                <div class="segmented" role="radiogroup" aria-labelledby="parallelLabel" aria-describedby="parallelHelp" id="parallel"></div>
+                <p id="parallelHelp" class="help" data-i18n="settings.parallelHelp"></p>
+              </div>
+              <div class="row">
+                <label for="speedLimit" data-i18n="settings.speedLimit"></label>
+                <select id="speedLimit" aria-describedby="speedLimitHelp"></select>
+                <p id="speedLimitHelp" class="help" data-i18n="settings.speedLimitHelp"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="files">
+            <h2 id="files" class="group-title" data-i18n="settings.files"></h2>
+            <div class="panel">
+              <div class="row">
+                <label for="checksum" data-i18n="settings.checksum"></label>
+                <input type="checkbox" id="checksum" class="switch" role="switch" aria-describedby="checksumHelp" />
+                <p id="checksumHelp" class="help" data-i18n="settings.checksumHelp"></p>
+              </div>
+              <div class="row">
+                <label for="notify" data-i18n="settings.notify"></label>
+                <input type="checkbox" id="notify" class="switch" role="switch" aria-describedby="notifyHelp" />
+                <p id="notifyHelp" class="help" data-i18n="settings.notifyHelp"></p>
+              </div>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="general">
+            <h2 id="general" class="group-title" data-i18n="settings.general"></h2>
+            <div class="panel">
+              <div class="row">
+                <label for="language" data-i18n="settings.language"></label>
+                <select id="language" aria-describedby="languageHelp"></select>
+                <p id="languageHelp" class="help" data-i18n="settings.languageHelp"></p>
+              </div>
+            </div>
+          </section>
+
+          <footer class="view-foot">
+            <button id="reset" class="button quiet" type="button" data-i18n="settings.reset"></button>
+            <p class="help" data-i18n="settings.resetHelp"></p>
+          </footer>
+        </section>
+
+        <!-- About -------------------------------------------------------->
+        <section id="view-about" class="view narrow" data-view="about" aria-labelledby="h-about" hidden>
+          <header class="view-head">
+            <div class="view-title">
+              <h1 id="h-about" data-i18n="about.heading"></h1>
+            </div>
+          </header>
+          <div class="panel about">
+            <div class="about-head">
+              <span class="mark">YDM</span>
+              <span class="badge"><span data-i18n="about.version"></span>&nbsp;<span id="version" class="num"></span></span>
+            </div>
+            <p class="about-lead" data-i18n="about.lead"></p>
+            <ul class="about-list">
+              <li data-i18n="about.free"></li>
+              <li data-i18n="about.private"></li>
+              <li data-i18n="about.keys"></li>
+            </ul>
+            <p class="about-foot"><a id="repo" class="inline-link" target="_blank" rel="noreferrer noopener" data-i18n="about.source"></a></p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

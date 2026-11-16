@@ -6,7 +6,9 @@
 ;   Chrome   Chrome on Windows refuses extensions installed by a program, so
 ;            the unpacked folder is copied to %LOCALAPPDATA%\YDM\chrome and
 ;            Chrome's extensions page is opened with the three steps shown
-;            (Developer mode, Load unpacked, pick the folder).
+;            (Developer mode, Load unpacked, pick the folder). A scheduled
+;            task of the user's own (update-chrome.ps1, every 3 hours) keeps
+;            that folder up to date from GitHub; YDM reloads itself.
 ;
 ; No administrator rights: everything goes into the user's own folders.
 ;
@@ -23,6 +25,7 @@
 #ifndef Repo
   #define Repo "mrdragon1-code/ydm"
 #endif
+#define UpdateTask "YDM Chrome update"
 
 [Setup]
 AppId={{6F1D2A4E-6C0B-4B8E-9A43-5D0B1E7C9A21}
@@ -64,7 +67,7 @@ en.FirefoxNext=Firefox will open and ask to add YDM: click "Add".
 en.ChromeSteps=Chrome only accepts extensions from its store or loaded by hand. The extensions page will open: 1. turn on "Developer mode" (top right), 2. click "Load unpacked", 3. choose this folder (already copied to the clipboard):
 en.OpenFirefox=Add YDM to Firefox
 en.OpenChrome=Open Chrome's extensions page
-en.ChromeUpdates=Chrome cannot update this copy by itself: YDM shows in its popup when a new version is out.
+en.ChromeUpdates=Updates are automatic: YDM checks GitHub every few hours and reloads itself with the new version when no download is running.
 it.BrowsersTitle=Browser
 it.BrowsersSubtitle=In quali browser installare YDM?
 it.Firefox=Firefox (si installa e si aggiorna da solo)
@@ -75,7 +78,7 @@ it.FirefoxNext=Si aprirà Firefox e chiederà di aggiungere YDM: clicca "Aggiung
 it.ChromeSteps=Chrome accetta solo estensioni dal suo negozio o caricate a mano. Si aprirà la pagina delle estensioni: 1. attiva "Modalità sviluppatore" (in alto a destra), 2. clicca "Carica estensione non pacchettizzata", 3. scegli questa cartella (già copiata negli appunti):
 it.OpenFirefox=Aggiungi YDM a Firefox
 it.OpenChrome=Apri la pagina delle estensioni di Chrome
-it.ChromeUpdates=Chrome non può aggiornare da solo questa copia: YDM avvisa nel popup quando esce una nuova versione.
+it.ChromeUpdates=Gli aggiornamenti sono automatici: YDM controlla GitHub ogni poche ore e si ricarica con la nuova versione quando nessun download è in corso.
 
 [Files]
 Source: "ydm.ico"; DestDir: "{app}"
@@ -83,15 +86,21 @@ Source: "ydm.ico"; DestDir: "{app}"
 Source: "{#Payload}\ydm-firefox.xpi"; DestDir: "{app}"; Check: WantFirefox
 #endif
 Source: "{#Payload}\chrome\*"; DestDir: "{app}\chrome"; Flags: recursesubdirs createallsubdirs ignoreversion; Check: WantChrome
+Source: "update-chrome.ps1"; DestDir: "{app}"; Flags: ignoreversion; Check: WantChrome
 
 [Icons]
 Name: "{userprograms}\YDM\{cm:OpenFirefox}"; Filename: "{code:FirefoxExe}"; Parameters: """{app}\ydm-firefox.xpi"""; IconFilename: "{app}\ydm.ico"; Check: WantFirefox
 Name: "{userprograms}\YDM\{cm:OpenChrome}"; Filename: "{app}\open-chrome.cmd"; IconFilename: "{app}\ydm.ico"; Check: WantChrome
 Name: "{userprograms}\YDM\YDM on GitHub"; Filename: "https://github.com/{#Repo}"
 
+[UninstallRun]
+Filename: "{sys}\schtasks.exe"; Parameters: "/Delete /TN ""{#UpdateTask}"" /F"; Flags: runhidden; RunOnceId: "RemoveUpdateTask"
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\chrome"
 Type: files; Name: "{app}\open-chrome.cmd"
+Type: files; Name: "{app}\update-chrome.ps1"
+Type: files; Name: "{app}\update.log"
 
 [Code]
 var
@@ -198,13 +207,31 @@ begin
     'start "" "' + Browser + '" ' + Page + #13#10, False);
 end;
 
+{ The user's own scheduled task (no administrator rights) that keeps the
+  Chrome folder up to date: every 3 hours, hidden. }
+procedure ScheduleChromeUpdates();
+var
+  Code: Integer;
+  Command: String;
+begin
+  Command := 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"'
+    + ExpandConstant('{app}\update-chrome.ps1') + '\" -Repo {#Repo}';
+  Exec(ExpandConstant('{sys}\schtasks.exe'),
+    '/Create /F /SC HOURLY /MO 3 /TN "{#UpdateTask}" /TR "' + Command + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Code: Integer;
   Folder: String;
 begin
   if CurStep <> ssPostInstall then Exit;
-  if WantChrome() then WriteChromeHelper();
+  if WantChrome() then
+  begin
+    WriteChromeHelper();
+    ScheduleChromeUpdates();
+  end;
   { Silent installs (scripts, tests) only copy the files: no dialogs, no
     browser opening. The Start menu entries do the rest later. }
   if WizardSilent() then Exit;

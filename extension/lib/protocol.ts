@@ -2,6 +2,7 @@
 
 import type { Text } from './i18n';
 import type { Settings } from './policy';
+import type { Verdict } from './security';
 
 /** A reason shown to the user: a message key, translated by the page that
  * shows it. Plain strings are reasons saved by YDM 0.2, in Italian. */
@@ -18,7 +19,11 @@ export type State =
   | 'failed'
   | 'cancelled'
   /** YDM could not do it; handed back to the browser's own downloader. */
-  | 'browser';
+  | 'browser'
+  /** A check found it suspicious: kept aside until the user decides. */
+  | 'held'
+  /** A known virus or a refused download: nothing reached the Downloads folder. */
+  | 'blocked';
 
 export interface Item {
   id: number;
@@ -42,6 +47,10 @@ export interface Item {
   sha256?: string;
   /** Where the browser saved it, once known. */
   downloadId?: number;
+  /** The security checks' verdict, once there is one. */
+  security?: Verdict;
+  /** While held: whether it was stopped before or after downloading. */
+  heldAt?: 'link' | 'file';
 }
 
 export type Part = [start: number, pos: number, end: number];
@@ -68,6 +77,10 @@ export type EngineCommand =
       limit: number;
       /** Compute the finished file's SHA-256. */
       checksum?: boolean;
+      /** Hold the finished file until the background has checked it. */
+      inspect?: boolean;
+      /** Hash it before the check, for online lookups. */
+      hashFirst?: boolean;
     }
   /** `keep`: a pause, the partial file stays for a later resume. */
   | { type: 'cancel'; id: number; keep?: boolean }
@@ -76,6 +89,9 @@ export type EngineCommand =
   | { type: 'connections'; id: number; max: number }
   /** The browser has copied the file; delete YDM's copy. */
   | { type: 'release'; id: number }
+  /** A held file was allowed: hand it to the browser, saved as `name`. */
+  /** `checksum`: not hashed yet, hash it while the browser copies it. */
+  | { type: 'deliver'; id: number; name: string; checksum?: boolean }
   /** A fresh engine: delete leftover files except those to resume. */
   | { type: 'prune'; keep: number[] };
 
@@ -89,6 +105,8 @@ export type EngineEvent =
   | { type: 'checkpoint'; id: number; checkpoint: Checkpoint }
   | { type: 'ready'; id: number; name: string; blobUrl: string }
   | { type: 'hashed'; id: number; sha256: string }
+  /** A finished file waiting for its check: its hash and first bytes. */
+  | { type: 'inspected'; id: number; name: string; sha256: string | null; head: number[] }
   | { type: 'failed'; id: number; reason: Reason; retryInBrowser: boolean }
   | { type: 'cancelled'; id: number };
 
@@ -146,4 +164,7 @@ export type PopupCommand =
   /** Takes a finished, failed or cancelled one off the list. */
   | { type: 'remove'; id: number }
   /** Pasted links or links picked from a page; `referrer`: that page. */
-  | { type: 'urls'; urls: string[]; referrer?: string };
+  | { type: 'urls'; urls: string[]; referrer?: string }
+  /** The user's answer to a security warning. */
+  | { type: 'allow'; id: number }
+  | { type: 'deny'; id: number };

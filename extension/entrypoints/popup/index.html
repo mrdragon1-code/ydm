@@ -11,10 +11,10 @@
       <span class="mark">YDM</span>
       <span id="summary" class="summary" aria-live="polite"></span>
       <button id="add" class="icon" type="button" data-i18n-title="popup.add" data-i18n-label="popup.add" aria-expanded="false" aria-controls="adder">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" /></svg>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
       </button>
       <button id="grab" class="icon" type="button" data-i18n-title="popup.grab" data-i18n-label="popup.grab">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10M3 6.5h10M3 9.5h5M11 9v4.5M9 11.5l2 2 2-2" /></svg>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11M2.5 7h11M2.5 10.5h5M11.5 9v5M9.5 12l2 2 2-2" /></svg>
       </button>
       <button id="settings" class="icon" type="button" data-i18n-title="popup.settings" data-i18n-label="popup.settings">
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -23,6 +23,7 @@
           <circle cx="6" cy="11.5" r="1.5" />
         </svg>
       </button>
+      <span class="divider" aria-hidden="true"></span>
       <input type="checkbox" id="enabled" class="switch" role="switch" data-i18n-label="popup.toggle" data-i18n-title="popup.toggle" />
     </header>
     <form id="adder" class="adder" hidden novalidate>
@@ -33,15 +34,23 @@
         <button type="submit" class="button" data-i18n="popup.addSubmit"></button>
       </div>
     </form>
-    <p id="update" class="update" hidden>
+    <p id="update" class="update strip" hidden>
       <span id="updateText"></span>
-      <a id="updateLink" class="button" target="_blank" rel="noreferrer noopener" data-i18n="update.get"></a>
+      <a id="updateLink" class="button quiet" target="_blank" rel="noreferrer noopener" data-i18n="update.get"></a>
     </p>
-    <p id="off" class="off" hidden data-i18n="popup.off"></p>
-    <p id="notice" class="notice" role="status" hidden></p>
+    <p id="attention" class="attention" role="alert" hidden>
+      <span class="strip-text">
+        <svg class="strip-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l5.5 2v4c0 3.2-2.4 5.4-5.5 6-3.1-.6-5.5-2.8-5.5-6V4zM8 5.5v3M8 10.6v.01" /></svg>
+        <span id="attentionText"></span>
+      </span>
+      <button id="attentionOpen" class="button quiet" type="button" data-i18n="app.decide"></button>
+    </p>
+    <p id="off" class="off strip" hidden data-i18n="popup.off"></p>
+    <p id="notice" class="notice strip" role="status" hidden></p>
     <ul id="list" class="rows"></ul>
     <div id="empty" class="empty" hidden>
-      <p data-i18n="popup.empty"></p>
+      <svg class="empty-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10.5l4 4 4-4M5 15v3.5h14V15" /></svg>
+      <p class="empty-title" data-i18n="popup.empty"></p>
       <p class="hint" id="hint"></p>
     </div>
     <footer>

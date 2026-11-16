@@ -171,10 +171,16 @@ jobs:
           if (-not $p.WaitForExit(120000)) { throw 'installer hung' }
           if ($p.ExitCode) { throw "installer exit $($p.ExitCode)" }
           if (-not (Test-Path "$dir\chrome\manifest.json")) { throw 'Chrome files missing' }
+          if (-not (Test-Path "$dir\update-chrome.ps1")) { throw 'Chrome updater missing' }
+          schtasks /Query /TN "YDM Chrome update" | Out-Null
+          if ($LASTEXITCODE) { throw 'Chrome update task missing' }
           $u = Start-Process (Get-ChildItem "$dir\unins*.exe")[0].FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -PassThru
           if (-not $u.WaitForExit(120000)) { throw 'uninstaller hung' }
           Start-Sleep 3
           if (Test-Path "$dir\chrome") { throw 'uninstall left files' }
+          schtasks /Query /TN "YDM Chrome update" 2>$null | Out-Null
+          if (-not $LASTEXITCODE) { throw 'uninstall left the update task' }
+          $global:LASTEXITCODE = 0
 
       - name: Tag and GitHub release
         shell: bash

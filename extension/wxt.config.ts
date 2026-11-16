@@ -14,6 +14,13 @@ const REPO = process.env.YDM_REPO || JSON.parse(readFileSync(path.join(import.me
  */
 const SELF_HOSTED = process.env.YDM_SELF_HOSTED === '1';
 
+/** Test builds only: where a local stand-in for VirusTotal and abuse.ch
+ * listens. Release builds leave it empty and always use the real services. */
+const SCAN_BASE = process.env.YDM_SCAN_BASE ?? '';
+if (SCAN_BASE && !/^http:\/\/127\.0\.0\.1:\d+$/.test(SCAN_BASE)) {
+  throw new Error('YDM_SCAN_BASE must be a local test address');
+}
+
 /** The extension's name and description in every language, for the
  * browser's own `_locales` (toolbar, extensions page, store listings).
  * Everything else is translated at runtime by lib/i18n.ts. */
@@ -43,7 +50,10 @@ export default defineConfig({
   outDir: SELF_HOSTED ? '.selfhosted' : '.output',
   vite: () => ({
     // Seen by the code as import.meta.env.YDM_REPO.
-    define: { 'import.meta.env.YDM_REPO': JSON.stringify(REPO ?? '') },
+    define: {
+      'import.meta.env.YDM_REPO': JSON.stringify(REPO ?? ''),
+      'import.meta.env.YDM_SCAN_BASE': JSON.stringify(SCAN_BASE),
+    },
   }),
   // `npm run dev` does not open a separate browser: load .output/chrome-mv3-dev
   // once in your own Chrome and it reloads itself on every change.
@@ -72,8 +82,10 @@ export default defineConfig({
       'declarativeNetRequestWithHostAccess',
       // "Download all links": reads the links of the page you ask it to.
       'scripting',
-      // "Download complete", with a button to show the file.
+      // "Download complete", and security warnings.
       'notifications',
+      // Looks for a newer version of a copy loaded unpacked, every half hour.
+      'alarms',
       ...(browser === 'firefox' ? [] : ['offscreen']),
     ],
     // Fetching a download from any site, with that site's cookies.
@@ -83,7 +95,9 @@ export default defineConfig({
         gecko: {
           id: 'ydm@yamantau',
           strict_min_version: '140.0',
-          data_collection_permissions: { required: ['none'] },
+          // Online checks (only with the user's own key) send the download's
+          // address and the file's hash: asked for when they are turned on.
+          data_collection_permissions: { required: ['none'], optional: ['browsingActivity', 'websiteActivity'] },
           ...(SELF_HOSTED &&
             REPO && { update_url: `https://github.com/${REPO}/releases/latest/download/updates.json` }),
         },

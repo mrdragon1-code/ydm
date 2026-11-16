@@ -34,6 +34,12 @@ Browser
   the server still has the very same file (same ETag or date, same size).
 - **Downloads page**: history, search, filters, details, the **SHA-256** of each file with
   a box to compare it with the one the site publishes.
+- **Security checks** before a file reaches your Downloads folder. On the device, always
+  and with nothing sent: programs disguised as documents (`invoice.pdf.exe`, or a PDF
+  whose first bytes say it is a program), look-alike and bare-number addresses. Online,
+  only with **your own free key**: VirusTotal and abuse.ch are asked about the file's
+  SHA-256 and the address (never the file). A known virus is deleted, never saved; a
+  suspicious download waits and asks you, in its own window.
 - **Add URLs** (paste one or many) and **download all links of a page**, filtered by type.
 - **Notification** when a download finishes, with a button to show the file.
 - **Settings**: on/off, minimum size, maximum connections (1–6), simultaneous downloads,
@@ -95,8 +101,12 @@ YDM is distributed from [GitHub releases](https://github.com/mrdragon1-code/ydm/
   `chrome://extensions`, turn on *Developer mode*, click *Load unpacked* and choose the folder.
 
 Chrome on Windows only accepts extensions from its own store or loaded by hand, so no
-installer can add YDM to Chrome by itself, and Chrome cannot update an unpacked copy: when a
-new version is out, YDM's popup says so with a link.
+installer can add YDM to Chrome by itself, and Chrome does not update an unpacked copy. The
+Windows installer takes care of that: a scheduled task of your own (no administrator rights,
+every 3 hours) fetches the latest release from GitHub, checks its SHA-256, and replaces the
+files in `%LOCALAPPDATA%\YDM\chrome`; YDM then reloads itself with the new version as soon as
+no download is running. Loaded by hand without the installer, YDM's popup says when a new
+version is out.
 
 ## Development (`extension/`)
 

@@ -15,7 +15,8 @@
     "show": "Mostra nella cartella",
     "open": "Apri",
     "details": "Dettagli",
-    "remove": "Togli dalla lista"
+    "remove": "Togli dalla lista",
+    "decide": "Decidi"
   },
   "popup": {
     "settings": "Impostazioni",
@@ -55,7 +56,9 @@
     "failedReason": "Non riuscito: {reason}",
     "cancelled": "Annullato",
     "browser": "Scaricato dal browser",
-    "browserReason": "Scaricato dal browser: {reason}"
+    "browserReason": "Scaricato dal browser: {reason}",
+    "held": "Aspetta te: {reason}",
+    "blocked": "Bloccato: {reason}"
   },
   "unit": {
     "perSecond": "{value}/s",
@@ -89,7 +92,9 @@
     "saveTooLarge": "file troppo grande per il disco",
     "saveAccessDenied": "cartella Download non accessibile",
     "saveFailed": "salvataggio non riuscito ({error})",
-    "saveFailedPlain": "salvataggio non riuscito"
+    "saveFailedPlain": "salvataggio non riuscito",
+    "blocked": "un virus noto: cancellato, mai salvato",
+    "denied": "non scaricato, come hai chiesto"
   },
   "settings": {
     "title": "Impostazioni di YDM",
@@ -128,7 +133,10 @@
     "siteRemoveLabel": "Togli {host}",
     "siteInvalid": "Non è un indirizzo di un sito. Scrivi per esempio mega.nz o www.esempio.it.",
     "noSites": "Nessun sito escluso.",
-    "reset": "Ripristina le impostazioni iniziali"
+    "reset": "Ripristina le impostazioni iniziali",
+    "files": "File",
+    "resetConfirm": "Clicca di nuovo per ripristinare",
+    "resetHelp": "Le tue chiavi API restano salvate."
   },
   "downloads": {
     "title": "Download di YDM",
@@ -163,14 +171,22 @@
       "one": "Scarica {count} file",
       "other": "Scarica {count} file"
     },
-    "grabEmpty": "Nessun link dei tipi scelti."
+    "grabEmpty": "Nessun link dei tipi scelti.",
+    "filterBlocked": "Bloccati",
+    "emptyNone": "Nessun download per ora",
+    "emptyFiltered": "Nessun download corrispondente",
+    "emptyFilteredHelp": "Niente corrisponde a questa ricerca e a questo filtro.",
+    "showAll": "Mostra tutti i download",
+    "details": "Dettagli"
   },
   "notify": {
     "done": "Download completato",
     "doneBody": "{name} · {size}",
     "failed": "Download non riuscito",
     "show": "Mostra nella cartella",
-    "open": "Apri"
+    "open": "Apri",
+    "suspicious": "Un download aspetta la tua decisione",
+    "blocked": "Bloccato un virus"
   },
   "translate": {
     "offer": "Mostrare YDM in {language}? Lo traduce il browser, su questo dispositivo.",
@@ -182,5 +198,140 @@
   "update": {
     "available": "È disponibile YDM {version}",
     "get": "Scaricalo"
+  },
+  "app": {
+    "nav": "YDM",
+    "skip": "Vai al contenuto",
+    "downloads": "Download",
+    "security": "Sicurezza",
+    "settings": "Impostazioni",
+    "about": "Info",
+    "decide": "Decidi",
+    "waiting": {
+      "one": "{count} download aspetta la tua decisione",
+      "other": "{count} download aspettano la tua decisione"
+    }
+  },
+  "about": {
+    "heading": "Informazioni su YDM",
+    "lead": "Un download manager che vive nel browser: download più veloci, controllati prima di arrivare nella cartella Download.",
+    "free": "Gratuito e open source. Niente account, niente pubblicità, nessun piano a pagamento.",
+    "private": "Agli autori di YDM non arriva nulla: non esiste un server di YDM.",
+    "keys": "I controlli online usano le tue chiavi gratuite, inviate solo al servizio a cui appartengono.",
+    "source": "Codice sorgente e versioni",
+    "version": "Versione"
+  },
+  "alert": {
+    "suspiciousTitle": "Questo download sembra sospetto",
+    "suspiciousLead": "YDM l’ha fermato prima che arrivasse nella cartella Download. Scaricalo solo se ti fidi del sito e aspettavi questo file.",
+    "blockedTitle": "Virus bloccato",
+    "blockedLead": "Questo file è un virus noto. YDM l’ha cancellato: nella cartella Download non è arrivato nulla.",
+    "file": "File",
+    "site": "Sito",
+    "size": "Dimensione",
+    "why": "Perché",
+    "details": "Dettagli",
+    "address": "Indirizzo completo",
+    "checked": "Controllato da",
+    "noHash": "non ancora calcolato: fermato prima della fine",
+    "report": "Vedi il rapporto completo su VirusTotal",
+    "deny": "Non scaricare",
+    "allow": "Scarica comunque",
+    "ok": "Ok, lascialo bloccato",
+    "notDownloaded": "Non scaricato.",
+    "downloading": "Download in corso.",
+    "uncheckedTitle": "Non è stato possibile controllare questo file",
+    "uncheckedLead": "YDM lo tiene in sospeso: nella cartella Download non è arrivato nulla. Senza il controllo, scaricalo solo se ti fidi del sito e aspettavi questo file."
+  },
+  "security": {
+    "heading": "Sicurezza",
+    "level": {
+      "clean": "Controllato: nessun problema",
+      "unknown": "Non verificato",
+      "suspicious": "Sospetto",
+      "malicious": "Virus noto"
+    },
+    "summary": {
+      "clean": "Nessun controllo ha trovato problemi.",
+      "unknown": "I servizi online non hanno risposto; sono stati fatti solo i controlli sul dispositivo.",
+      "suspicious": "Qualcosa in questo download non torna.",
+      "malicious": "È un virus noto."
+    },
+    "source": {
+      "local": "sul tuo dispositivo",
+      "virustotal": "VirusTotal",
+      "urlhaus": "URLhaus",
+      "malwarebazaar": "MalwareBazaar"
+    },
+    "local": {
+      "credentials": "l’indirizzo nasconde il vero sito dietro un nome e una password ({host})",
+      "punycode": "il nome del sito usa lettere di un altro alfabeto che possono imitare un sito noto ({host})",
+      "ipHost": "il sito non ha un nome, solo un numero ({host}), come capita spesso con i virus",
+      "doubleExtension": "«{name}» sembra un .{looks} ma è un programma .{is}",
+      "disguised": "«{name}» si chiama come un .{looks} ma in realtà è un programma"
+    },
+    "vt": {
+      "fileMalicious": {
+        "one": "{count} antivirus su {total} riconosce questo file come virus",
+        "other": "{count} antivirus su {total} riconoscono questo file come virus"
+      },
+      "fileSuspicious": {
+        "one": "{count} antivirus su {total} segnala questo file",
+        "other": "{count} antivirus su {total} segnalano questo file"
+      },
+      "urlMalicious": {
+        "one": "{count} servizio di sicurezza su {total} considera pericoloso questo indirizzo",
+        "other": "{count} servizi di sicurezza su {total} considerano pericoloso questo indirizzo"
+      },
+      "urlSuspicious": {
+        "one": "{count} servizio di sicurezza su {total} segnala questo indirizzo",
+        "other": "{count} servizi di sicurezza su {total} segnalano questo indirizzo"
+      }
+    },
+    "timeout": "{service} non ha risposto in tempo: il file non è stato controllato",
+    "urlhaus": {
+      "malware": "URLhaus indica che da questo indirizzo si diffondono virus"
+    },
+    "bazaar": {
+      "known": "MalwareBazaar elenca proprio questo file come virus",
+      "knownNamed": "MalwareBazaar elenca proprio questo file come virus ({name})"
+    },
+    "status": {
+      "online": "Protetto: sul dispositivo e online",
+      "onlineHelp": "Ogni download viene controllato sul tuo dispositivo, e il suo indirizzo e lo SHA-256 presso i servizi di cui hai inserito la chiave.",
+      "local": "Protetto sul dispositivo",
+      "localHelp": "Ogni download viene controllato sul tuo dispositivo. Aggiungi qui sotto una chiave gratuita per riconoscere anche i virus noti.",
+      "off": "Controlli spenti",
+      "offHelp": "YDM non controlla i download. Resta attiva la protezione del browser."
+    },
+    "localTitle": "Sul tuo dispositivo",
+    "scanLocal": "Controlla ogni download",
+    "localHelp": "Cerca indirizzi falsi, programmi nascosti dietro un nome .pdf o .jpg, e trucchi simili. Nulla esce dal tuo computer.",
+    "ask": "Fermati e chiedi quando qualcosa sembra sospetto",
+    "askHelp": "Una piccola finestra ti chiede se scaricarlo. I virus noti vengono sempre bloccati, qualunque cosa dica questa opzione.",
+    "onlineTitle": "Virus noti (online, facoltativo)",
+    "onlineLead": "Con una tua chiave gratuita, YDM chiede a questi servizi di ogni download. YDM non include chiavi e non ha server: la chiave resta in questo browser e va solo al suo servizio.",
+    "vtLabel": "VirusTotal",
+    "vtHelp": "Circa 70 antivirus. Gratuito per uso personale: 4 controlli al minuto, 500 al giorno.",
+    "vtGet": "Ottieni una chiave gratuita",
+    "acLabel": "abuse.ch (URLhaus e MalwareBazaar)",
+    "acHelp": "Database pubblici di virus e degli indirizzi che li diffondono. Gratuiti per uso non commerciale.",
+    "acGet": "Ottieni una chiave gratuita",
+    "keyPlaceholder": "Incolla la tua chiave API",
+    "keyReplace": "Incolla una nuova chiave per sostituirla",
+    "keySave": "Salva e prova",
+    "keyTesting": "Prova in corso…",
+    "keyRemove": "Togli la chiave",
+    "keyOn": "Attiva",
+    "keyOff": "Spenta",
+    "keyInvalid": "Non sembra una chiave API. Copiala di nuovo dalla pagina del servizio.",
+    "keyRejected": "Il servizio non ha accettato questa chiave. Controlla che sia completa e attiva.",
+    "consentNeeded": "Firefox ha bisogno del tuo permesso per inviare gli indirizzi dei download a questo servizio.",
+    "sentTitle": "Cosa viene inviato, e cosa no",
+    "sent1": "Inviati: l’indirizzo del download e l’impronta SHA-256 del file finito.",
+    "sent2": "Mai inviati: il file, i tuoi cookie, la pagina su cui eri.",
+    "sent3": "Le risposte vengono ricordate per una settimana, così lo stesso file non viene chiesto due volte.",
+    "historyTitle": "Avvisi recenti",
+    "historyEmpty": "Nessun download sospetto o bloccato."
   }
 }

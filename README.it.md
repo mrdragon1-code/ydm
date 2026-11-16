@@ -23,6 +23,12 @@ estensione e funziona subito: niente programmi da installare, niente finestre.
 - **Pagina Download**: cronologia, ricerca, filtri, dettagli e **SHA-256** di ogni file, con
   un campo per confrontarlo con quello pubblicato dal sito.
 - **Aggiungi URL** (incollane uno o tanti) e **scarica tutti i link di una pagina**, per tipo.
+- **Controlli di sicurezza** prima che il file arrivi nella cartella Download. Sul
+  dispositivo, sempre e senza inviare nulla: programmi travestiti da documenti
+  (`fattura.pdf.exe`, o un PDF i cui primi byte dicono che è un programma), indirizzi
+  ingannevoli o fatti solo di numeri. Online, solo con **la tua chiave gratuita**:
+  VirusTotal e abuse.ch ricevono lo SHA-256 del file e l'indirizzo (mai il file). Un virus
+  noto viene eliminato, mai salvato; un download sospetto si ferma e ti chiede cosa fare.
 - **Notifica** a fine download, con il pulsante per mostrare il file.
 - **Impostazioni**: attivo/spento, dimensione minima, connessioni massime (1–6), download
   contemporanei, limite di velocità, siti esclusi e **«Lascia al browser i programmi»**.
@@ -60,7 +66,11 @@ YDM si scarica solo dalle [release di GitHub](https://github.com/mrdragon1-code/
   pacchettizzata* e scegli la cartella.
 
 Chrome su Windows accetta solo estensioni dal suo negozio o caricate a mano: nessun installer
-può aggiungere YDM a Chrome da solo, e Chrome non aggiorna una copia caricata a mano. Quando
-esce una nuova versione, il popup di YDM lo segnala con un link.
+può aggiungere YDM a Chrome da solo, e Chrome non aggiorna una copia caricata a mano. Ci pensa
+l'installer per Windows: un'attività pianificata del tuo utente (senza permessi di
+amministratore, ogni 3 ore) scarica l'ultima versione da GitHub, ne verifica lo SHA-256 e
+sostituisce i file in `%LOCALAPPDATA%\YDM\chrome`; YDM si ricarica da solo con la nuova
+versione appena nessun download è in corso. Caricato a mano senza installer, il popup di YDM
+segnala quando esce una nuova versione.
 
 Sviluppo, test e pubblicazione: vedi il [README in inglese](README.md#development-extension).

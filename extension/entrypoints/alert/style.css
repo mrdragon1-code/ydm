@@ -1,0 +1,305 @@
+@import '../../assets/theme.css';
+
+/* A small decision window (about 440 × 560): what happened, which file,
+   why, then two choices pinned to the bottom. The level sets one colour,
+   used by the icon and the reason markers only:
+     unknown     not checked in time: amber outline, a question mark
+     suspicious  something looks wrong: solid amber, an exclamation mark
+     malicious   a known virus: solid red, a cross */
+
+body {
+  --level: var(--warn);
+  --level-soft: var(--warn-soft);
+  min-height: 100dvh;
+  background: var(--surface);
+}
+
+body[data-level='malicious'] {
+  --level: var(--danger);
+  --level-soft: var(--danger-soft);
+}
+
+.alert {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.body {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+
+.wrap {
+  overflow-wrap: anywhere;
+}
+
+/* --- What happened ------------------------------------------------------- */
+
+.head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.level-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-lg);
+  background: var(--level-soft);
+}
+
+.level-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.level-icon .shape {
+  fill: var(--level);
+}
+
+.level-icon .glyph {
+  fill: none;
+  stroke: var(--surface);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Unchecked: the outline of the shield, not a filled warning. */
+body[data-level='unknown'] .level-icon .shape {
+  fill: none;
+  stroke: var(--level);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+body[data-level='unknown'] .level-icon .glyph {
+  stroke: var(--level);
+  stroke-width: 1.8;
+}
+
+h1 {
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+
+.lead {
+  color: var(--text-2);
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+/* --- Which file ---------------------------------------------------------- */
+
+.file {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.file-name {
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+.file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-4);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+.file-meta div {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.file-meta dt::after {
+  content: ':';
+}
+
+.file-meta dd {
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* --- Why ----------------------------------------------------------------- */
+
+.why h2 {
+  margin-bottom: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+.reasons {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+}
+
+/* A marker in the reason's own level, then the cause, then who said so. */
+.reasons li {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  padding-left: var(--space-4);
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.reasons li::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+.reasons li[data-level='malicious']::before {
+  background: var(--danger);
+}
+
+.reasons li[data-level='unknown']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--warn);
+}
+
+.reasons .source {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+
+/* --- Details ------------------------------------------------------------- */
+
+.more summary {
+  width: fit-content;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+
+.more summary:hover {
+  color: var(--text);
+}
+
+.more-facts {
+  display: grid;
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.more-facts div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.more-facts dt {
+  color: var(--text-2);
+}
+
+.more-facts dd {
+  min-width: 0;
+}
+
+.more-facts .button {
+  margin-top: var(--space-1);
+}
+
+.more-facts .button[hidden] {
+  display: none;
+}
+
+.report {
+  display: inline-block;
+  margin-top: var(--space-2);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  text-underline-offset: 2px;
+}
+
+.report[hidden] {
+  display: none;
+}
+
+/* --- The choice ---------------------------------------------------------- */
+
+/* Pinned to the bottom of the window, so it is always in reach. */
+.choices {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding: var(--space-3) var(--space-5) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.choices[hidden] {
+  display: none;
+}
+
+.choices .button {
+  flex: 1 1 150px;
+  min-height: 36px;
+  font-size: var(--fs-md);
+}
+
+.choices .button[hidden] {
+  display: none;
+}
+
+.after {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  color: var(--text-2);
+  text-align: center;
+}
+
+.after:empty {
+  display: none;
+}
+
+@media (max-width: 360px) {
+  .body {
+    padding: var(--space-4) var(--space-4) var(--space-3);
+  }
+
+  .choices {
+    padding: var(--space-3) var(--space-4);
+  }
+}
