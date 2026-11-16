@@ -88,10 +88,35 @@ export function checkUrl(raw: string): Finding[] {
   if (host.split('.').some((label) => label.startsWith('xn--'))) add('suspicious', 'punycode', { host });
   const ipv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
   const ipv6 = host.startsWith('[');
-  const local = ipv4 && /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
   // Real sites have names; bare numbers are typical of malware hosting.
-  if ((ipv4 || ipv6) && !local) add('suspicious', 'ipHost', { host });
+  // Not this computer, the home or office network, or the carrier's.
+  if ((ipv4 || ipv6) && !isLocalIp(host)) add('suspicious', 'ipHost', { host });
   return out;
+}
+
+/** An address on this computer or a private network: a NAS, a router, a
+ * development server. Not the open internet. */
+export function isLocalIp(host: string): boolean {
+  if (host.startsWith('[')) {
+    const v6 = host.slice(1, -1).toLowerCase();
+    return (
+      v6 === '::1' ||
+      v6 === '::' ||
+      /^fe[89ab][0-9a-f]:/.test(v6) || // link-local fe80::/10
+      /^f[cd][0-9a-f]{2}:/.test(v6) || // unique local fc00::/7
+      /^::ffff:(127|10|192\.168)\./.test(v6)
+    );
+  }
+  const [a, b] = host.split('.').map(Number) as [number, number];
+  return (
+    a === 127 || // this computer
+    a === 10 ||
+    a === 0 || // 0.0.0.0, "this computer" for local servers
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 169 && b === 254) || // link-local: routers, printers
+    (a === 100 && b >= 64 && b <= 127) // carrier-grade NAT, Tailscale
+  );
 }
 
 /** What a file's name says. */
