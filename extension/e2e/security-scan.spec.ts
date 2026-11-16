@@ -5,6 +5,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { type FakeScanners, GOOD_KEY, startFakeScanners } from './fake-scanners';
+import { ydmWorker } from './ready';
 
 // The security checks, end to end: a stand-in VirusTotal says which files
 // are viruses; YDM must keep them out of the Downloads folder, ask about
@@ -76,10 +77,7 @@ const test = base.extend<{ context: BrowserContext; worker: Worker; served: Serv
     await context.close();
   },
   worker: async ({ context }, use) => {
-    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-    // A just-installed extension: let its listeners register first.
-    await new Promise((r) => setTimeout(r, 1000));
-    await use(worker);
+    await use(await ydmWorker(context));
   },
 });
 

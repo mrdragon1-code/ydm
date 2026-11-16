@@ -87,12 +87,17 @@ try {
   }
   ff.kill();
 
-  const again = ranged(log.slice(before)).reduce((n, m) => n + Number(m[2]) - Number(m[1]) + 1, 0);
+  const after = ranged(log.slice(before));
+  const again = after.reduce((n, m) => n + Number(m[2]) - Number(m[1]) + 1, 0);
+  // Resumed, not started over: no request after reopening begins at the
+  // file's first byte. (How much was kept depends on how fast the machine
+  // was before Firefox closed, so it is not a fixed share of the file.)
+  const restarted = after.some((m) => m[1] === '0');
   const sha = seconds === null ? null : createHash('sha256').update(readFileSync(path.join(dir, 'big.bin'))).digest('hex');
   const checks = [
     ['file in the download folder after reopening', seconds !== null],
     ['byte-exact', sha === expectedSha],
-    ['only the missing part fetched again', again > 0 && again < SIZE_MB * 2 ** 20 * 0.8],
+    ['only the missing part fetched again', again > 0 && again < SIZE_MB * 2 ** 20 && !restarted],
   ];
   for (const [name, passed] of checks) console.log(`  ${passed ? '✓' : '✗'} ${name}`);
   console.log(`  after reopening: ${(again / 2 ** 20).toFixed(1)} MB of ${SIZE_MB} fetched again`);
@@ -100,7 +105,7 @@ try {
 } finally {
   server.kill();
   await sleep(1000);
-  rmSync(dir, { recursive: true, force: true });
-  rmSync(profile, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 }
 process.exit(ok ? 0 : 1);
