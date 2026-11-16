@@ -44,7 +44,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       signed: ${{ steps.firefox.outputs.signed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The commit CI tested, not whatever main is now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -62,7 +62,7 @@ jobs:
             echo "new=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.version.outputs.new == 'true'
         with:
           node-version: 22
@@ -124,7 +124,7 @@ jobs:
           cp -r .output/chrome-mv3 payload/chrome
           if [ -f "dist/ydm-$VERSION-firefox.xpi" ]; then cp "dist/ydm-$VERSION-firefox.xpi" payload/ydm-firefox.xpi; fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.version.outputs.new == 'true'
         with:
           name: release
@@ -137,11 +137,11 @@ jobs:
     if: needs.build.outputs.new == 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release
           path: extension
