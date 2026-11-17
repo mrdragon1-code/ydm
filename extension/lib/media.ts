@@ -10,7 +10,7 @@
 /** A video seen on a page. */
 export interface MediaFound {
   url: string;
-  kind: 'direct' | 'hls';
+  kind: 'direct' | 'hls' | 'dash';
   /** For the list: a name, then what is known of quality and size. */
   title: string;
   /** e.g. "1080p", "720p · 2.4 Mbit/s"; '' when unknown. */
@@ -19,10 +19,10 @@ export interface MediaFound {
   size: number | null;
   /** Protected (DRM): shown, never downloaded. */
   drm: boolean;
-  /** HLS variants with separate audio: not joined yet, video only. */
-  separateAudio?: boolean;
   /** A live stream: shown, not downloadable. */
   live?: boolean;
+  /** Another reason it cannot be downloaded yet (a `reason.*` key). */
+  unsupported?: 'webm' | 'notSupported' | 'notVideo';
   /** The page it was on, sent as the Referer. */
   page?: string;
 }
@@ -57,6 +57,8 @@ export interface Variant {
   codecs: string;
   /** Plays its audio from a separate playlist. */
   separateAudio: boolean;
+  /** That playlist: the group's default track, else its first. */
+  audio?: string;
 }
 
 export interface Key {
@@ -118,13 +120,12 @@ export function parsePlaylist(text: string, base: string): Playlist {
   if (lines[0] !== '#EXTM3U') throw new Error('not an HLS playlist');
 
   if (lines.some((l) => l.startsWith('#EXT-X-STREAM-INF'))) {
-    const audioWithUri = new Set(
-      lines
-        .filter((l) => l.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(l))
-        .map(attributes)
-        .filter((a) => a.URI)
-        .map((a) => a['GROUP-ID']),
-    );
+    // Each audio group's playlist: the default track, else the first.
+    const audioOf = new Map<string, string>();
+    for (const a of lines.filter((l) => l.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(l)).map(attributes)) {
+      if (!a.URI || !a['GROUP-ID']) continue;
+      if (!audioOf.has(a['GROUP-ID']) || a.DEFAULT === 'YES') audioOf.set(a['GROUP-ID'], resolve(a.URI, base));
+    }
     const variants: Variant[] = [];
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]!;
@@ -137,7 +138,8 @@ export function parsePlaylist(text: string, base: string): Playlist {
         bandwidth: Number(a.BANDWIDTH ?? a['AVERAGE-BANDWIDTH'] ?? 0),
         height: Number(/x(\d+)$/.exec(a.RESOLUTION ?? '')?.[1] ?? 0),
         codecs: a.CODECS ?? '',
-        separateAudio: !!a.AUDIO && audioWithUri.has(a.AUDIO),
+        separateAudio: !!a.AUDIO && audioOf.has(a.AUDIO),
+        ...(a.AUDIO && audioOf.has(a.AUDIO) && { audio: audioOf.get(a.AUDIO) }),
       });
     }
     // Session keys in a master playlist announce protection too.

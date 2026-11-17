@@ -25,7 +25,8 @@
     "videoAdded": "Added",
     "videoProtected": "Protected (DRM): cannot be downloaded",
     "videoLive": "Live stream: cannot be downloaded",
-    "videoNoAudio": "video only: its separate audio is not joined yet",
+    "videoYoutube": "YouTube videos are not supported in this version.",
+    "videoFacebook": "Facebook and Instagram videos are not supported yet.",
     "videoStream": "stream",
     "settings": "Settings",
     "all": "All downloads",
@@ -80,6 +81,8 @@
     "hours": "{h} h {m} min"
   },
   "reason": {
+    "webm": "this video is only in WebM format, not supported yet",
+    "notSupported": "this video format is not supported yet",
     "protected": "the video is protected (DRM) and cannot be downloaded",
     "live": "live streams cannot be downloaded",
     "notVideo": "no video found at this address",
