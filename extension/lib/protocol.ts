@@ -62,6 +62,8 @@ export interface Checkpoint {
   validator: string;
   /** Byte ranges still missing, `[from, to)`; everything else is on disk. */
   missing: [number, number][];
+  /** A stream (HLS): segments before `next` are on disk, `bytes` long. */
+  hls?: { next: number; bytes: number; sizes: number[]; init?: number };
 }
 
 /** Background → engine. */
@@ -81,12 +83,16 @@ export type EngineCommand =
       inspect?: boolean;
       /** Hash it before the check, for online lookups. */
       hashFirst?: boolean;
+      /** A stream playlist, joined into one MP4; a plain file otherwise. */
+      kind?: 'hls';
     }
   /** `keep`: a pause, the partial file stays for a later resume. */
   | { type: 'cancel'; id: number; keep?: boolean }
   | { type: 'limit'; id: number; bytesPerSecond: number }
   /** The most connections this download may use now (per-host budget). */
   | { type: 'connections'; id: number; max: number }
+  /** A stream's hosts have their Referer rule: the worker goes on. */
+  | { type: 'proceed'; id: number }
   /** The browser has copied the file; delete YDM's copy. */
   | { type: 'release'; id: number }
   /** A held file was allowed: hand it to the browser, saved as `name`. */
@@ -107,6 +113,7 @@ export type EngineEvent =
   | { type: 'hashed'; id: number; sha256: string }
   /** A finished file waiting for its check: its hash and first bytes. */
   | { type: 'inspected'; id: number; name: string; sha256: string | null; head: number[] }
+  | { type: 'origins'; id: number; urls: string[] }
   | { type: 'failed'; id: number; reason: Reason; retryInBrowser: boolean }
   | { type: 'cancelled'; id: number };
 
@@ -124,7 +131,9 @@ export type WorkerCommand =
     }
   | { type: 'limit'; bytesPerSecond: number }
   | { type: 'connections'; max: number }
-  | { type: 'cancel' };
+  | { type: 'cancel' }
+  /** A stream's other hosts now get the page's Referer: go on. */
+  | { type: 'proceed' };
 
 /** Download worker → engine page. Sent after the file handle is closed. */
 export type WorkerEvent =
@@ -135,7 +144,9 @@ export type WorkerEvent =
   | { type: 'checkpoint'; checkpoint: Checkpoint }
   | { type: 'done'; name: string; size: number }
   | { type: 'failed'; reason: Reason; retryInBrowser: boolean }
-  | { type: 'cancelled' };
+  | { type: 'cancelled' }
+  /** A stream: one address per host its pieces come from, before fetching them. */
+  | { type: 'origins'; urls: string[] };
 
 /** Background → popup and downloads page: the whole list, newest first,
  * or (`patch`) only the items that changed. */
@@ -165,6 +176,8 @@ export type PopupCommand =
   | { type: 'remove'; id: number }
   /** Pasted links or links picked from a page; `referrer`: that page. */
   | { type: 'urls'; urls: string[]; referrer?: string }
+  /** A video found on a page: a file, or a stream joined into one MP4. */
+  | { type: 'video'; url: string; kind: 'direct' | 'hls'; name?: string; referrer?: string }
   /** The user's answer to a security warning. */
   | { type: 'allow'; id: number }
   | { type: 'deny'; id: number };

@@ -40,6 +40,9 @@ Browser
   only with **your own free key**: VirusTotal and abuse.ch are asked about the file's
   SHA-256 and the address (never the file). A known virus is deleted, never saved; a
   suspicious download waits and asks you, in its own window.
+- **Videos on web pages**: the popup lists the videos the page is playing (quality, size)
+  and downloads them; HLS streams are joined into one MP4 without re-encoding (AES-128
+  streams decrypted, resumable). Protected (DRM) and live videos are never downloaded.
 - **Links in images** (OCR): right-click an image, or paste a screenshot in "Add URLs":
   the text is read **on your device** (Tesseract, shipped inside YDM, nothing is sent)
   and the links found are listed to pick.

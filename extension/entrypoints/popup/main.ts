@@ -2,6 +2,7 @@ import { t } from '@/lib/i18n';
 import { wireAdder } from '@/lib/ui/adder';
 import { bytes, speed } from '@/lib/ui/format';
 import { createRow, type Row, syncList } from '@/lib/ui/row';
+import { type MediaFound, videoName } from '@/lib/media';
 import { connect, isActive, type View } from '@/lib/ui/store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -37,6 +38,73 @@ function openAlert(id: number) {
     .catch(() => void browser.tabs.create({ url: browser.runtime.getURL(`/alert.html#${id}`) }));
   window.close();
 }
+
+// --- videos on the current page --------------------------------------------
+
+/** The videos the page in the current tab has loaded, as the background
+ * saw them; the list follows while the popup is open. */
+async function showVideos() {
+  // `#tab=<id>`: the tests open the popup as a page, which is then the
+  // active tab itself; they name the tab whose videos it should show.
+  const named = Number(new URLSearchParams(location.hash.slice(1)).get('tab'));
+  const [tab] = named
+    ? [await browser.tabs.get(named).catch(() => undefined)]
+    : await browser.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+  if (tab?.id === undefined || tab.incognito) return;
+  const key = `media:${tab.id}`;
+  const draw = (found: MediaFound[] | undefined) => renderVideos(found ?? []);
+  draw(((await browser.storage.session.get(key).catch(() => ({}))) as Record<string, MediaFound[]>)[key]);
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'session' && changes[key]) draw(changes[key].newValue as MediaFound[] | undefined);
+  });
+}
+
+/** Addresses already sent this time the popup is open. */
+const added = new Set<string>();
+
+function renderVideos(found: MediaFound[]) {
+  $('videos').hidden = !found.length;
+  $('videoList').replaceChildren(
+    ...found.map((m) => {
+      const li = document.createElement('li');
+      const text = document.createElement('div');
+      text.className = 'video-text';
+      const title = document.createElement('span');
+      title.className = 'video-title';
+      title.textContent = m.title || videoName('', 'mp4');
+      title.title = m.title;
+      const meta = document.createElement('span');
+      meta.className = 'video-meta';
+      const blocked = m.drm ? t('popup.videoProtected') : m.live ? t('popup.videoLive') : '';
+      meta.textContent = [
+        m.quality || (m.kind === 'hls' ? t('popup.videoStream') : ''),
+        m.size ? `${m.kind === 'hls' ? '~' : ''}${bytes(m.size)}` : '',
+        blocked || (m.separateAudio ? t('popup.videoNoAudio') : ''),
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      if (blocked) li.dataset.blocked = '';
+      text.append(title, meta);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button small';
+      const done = added.has(m.url);
+      button.textContent = done ? t('popup.videoAdded') : t('popup.videoDownload');
+      button.disabled = done || !!blocked;
+      button.addEventListener('click', () => {
+        const ext = m.kind === 'hls' ? 'mp4' : (/\.(mp4|webm|mkv|mov)(?:$|\?)/i.exec(m.url)?.[1]?.toLowerCase() ?? 'mp4');
+        send({ type: 'video', url: m.url, kind: m.kind, name: videoName(m.title, ext), referrer: m.page });
+        added.add(m.url);
+        button.textContent = t('popup.videoAdded');
+        button.disabled = true;
+      });
+      li.append(text, button);
+      return li;
+    }),
+  );
+}
+
+void showVideos();
 
 toggle.addEventListener('change', () => send({ type: 'enabled', value: toggle.checked }));
 clear.addEventListener('click', () => send({ type: 'clear' }));
