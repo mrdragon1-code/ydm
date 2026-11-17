@@ -229,3 +229,10 @@ footer #all:hover {
 .video-list li[data-blocked] .video-meta {
   color: var(--text-3);
 }
+
+.video-list li.video-note {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  background: transparent;
+  padding: var(--space-1) 0;
+}

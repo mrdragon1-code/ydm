@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0
+
+### New
+- **Video and audio apart** — what most big sites send — are now downloaded and joined into
+  **one MP4**, without re-encoding:
+  - **DASH** videos (segments by template, timeline, list, or one file per track);
+  - **HLS with separate audio** (as on X), in MP4 or MPEG-TS pieces.
+  Both tracks resume after a pause or a closed browser.
+- When a video cannot be downloaded the popup says why instead of showing nothing:
+  protected (DRM), live, WebM only, a format not supported yet; on YouTube, Facebook and
+  Instagram it says they are not supported yet.
+
 ## 1.3.0
 
 ### New

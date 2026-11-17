@@ -41,8 +41,9 @@ Browser
   SHA-256 and the address (never the file). A known virus is deleted, never saved; a
   suspicious download waits and asks you, in its own window.
 - **Videos on web pages**: the popup lists the videos the page is playing (quality, size)
-  and downloads them; HLS streams are joined into one MP4 without re-encoding (AES-128
-  streams decrypted, resumable). Protected (DRM) and live videos are never downloaded.
+  and downloads them; HLS and DASH streams, also with video and audio apart, are joined
+  into one MP4 without re-encoding (AES-128 streams decrypted, resumable). Protected (DRM)
+  and live videos are never downloaded; YouTube is not supported.
 - **Links in images** (OCR): right-click an image, or paste a screenshot in "Add URLs":
   the text is read **on your device** (Tesseract, shipped inside YDM, nothing is sent)
   and the links found are listed to pick.

@@ -78,11 +78,18 @@ function startSite(): Promise<{ site: Site; server: Server }> {
       const cipher = createCipheriv('aes-128-cbc', KEY, iv);
       return send('video/mp2t', Buffer.concat([cipher.update(fixture(`hls-ts/seg${enc[1]}.m2ts`)), cipher.final()]));
     }
-    const file = /^\/(hls-ts|hls-fmp4)\/([\w.]+)$/.exec(p);
+    const file = /^\/(hls-ts|hls-fmp4|dash|hls-split-fmp4|hls-split-mpegts)\/([\w.-]+)$/.exec(p);
     if (file) {
-      if (site.slow && file[2]!.startsWith('seg')) await new Promise((r) => setTimeout(r, 700));
-      const type = file[2]!.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : file[2]!.endsWith('.m2ts') ? 'video/mp2t' : 'video/mp4';
-      return send(type, fixture(`${file[1]}/${file[2]}`));
+      if (site.slow && /^(seg|chunk|s\d_)/.test(file[2]!)) await new Promise((r) => setTimeout(r, 700));
+      const name = file[2]!;
+      const type = name.endsWith('.m3u8')
+        ? 'application/vnd.apple.mpegurl'
+        : name.endsWith('.mpd')
+          ? 'application/dash+xml'
+          : name.endsWith('.m2ts')
+            ? 'video/mp2t'
+            : 'video/mp4';
+      return send(type, fixture(`${file[1]}/${name}`));
     }
     res.writeHead(404).end();
   });
@@ -158,6 +165,22 @@ async function savedFile(worker: Worker): Promise<{ filename: string; bytes: Buf
     60_000,
   ).then((list) => list.filter((d) => d.url.startsWith('blob:') && d.state === 'complete'));
   return { filename: d!.filename, bytes: readFileSync(d!.filename) };
+}
+
+/** How many fragments of each track id a fragmented MP4 holds. */
+function fragmentsPerTrack(b: Buffer): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (let at = 0; at + 8 <= b.length; ) {
+    const size = b.readUInt32BE(at);
+    if (size < 8) break;
+    if (b.toString('latin1', at + 4, at + 8) === 'moof') {
+      const i = b.indexOf('tfhd', at, 'latin1');
+      const track = b.readUInt32BE(i + 8);
+      out[track] = (out[track] ?? 0) + 1;
+    }
+    at += size;
+  }
+  return out;
 }
 
 /** Top-level MP4 boxes, and the number of tracks in the movie box. */
@@ -286,4 +309,66 @@ test('a stream paused halfway resumes without fetching its segments again', asyn
   const twice = [...site.hits.entries()].filter(([k, n]) => k.startsWith('/hls-ts/seg') && n > 1).map(([k]) => k);
   expect(twice.length).toBeLessThanOrEqual(4); // at most the ones in flight at the pause
   expect(site.hits.get('/hls-ts/seg0.m2ts')).toBe(1);
+});
+
+test('a DASH video (video and audio apart) is listed and saved as one MP4 with both', async ({ context, worker, id, site }) => {
+  const page = await context.newPage();
+  const at = `${site.base}/page-stream?title=Clip&src=/dash/manifest.mpd`;
+  await page.goto(at);
+  const tabId = await tabWithVideos(worker, at);
+  const popup = await popupFor(context, id, tabId);
+  const row = popup.locator('#videoList li');
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText('90p');
+  await row.getByRole('button', { name: 'Download' }).click();
+  const { bytes } = await savedFile(worker);
+  expect(await ydmName(worker)).toBe('Clip.mp4');
+  expect(mp4Structure(bytes).tracks).toBe(2);
+  expect(fragmentsPerTrack(bytes)).toEqual({ 1: 8, 2: 8 });
+});
+
+for (const format of ['fmp4', 'mpegts']) {
+  test(`HLS with its audio apart (${format}) becomes one MP4 with both`, async ({ context, worker, id, site }) => {
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${id}/popup.html`);
+    await popup.locator('#add').click();
+    await popup.locator('#urls').fill(`${site.base}/hls-split-${format}/master.m3u8`);
+    await popup.getByRole('button', { name: 'Download', exact: true }).click();
+    const { bytes } = await savedFile(worker);
+    expect(mp4Structure(bytes).tracks).toBe(2);
+    const per = fragmentsPerTrack(bytes);
+    expect(per[1]).toBeGreaterThan(0);
+    expect(per[2]).toBeGreaterThan(0);
+  });
+}
+
+test('a DASH video paused halfway resumes both tracks where they were', async ({ context, worker, id, site }) => {
+  test.setTimeout(90_000);
+  site.slow = true;
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  await popup.locator('#add').click();
+  await popup.locator('#urls').fill(`${site.base}/dash/manifest.mpd`);
+  await popup.getByRole('button', { name: 'Download', exact: true }).click();
+  const row = popup.locator('#list li').first();
+  await until(async () => [...site.hits.keys()].filter((k) => k.startsWith('/dash/chunk-0-')).length, (n) => n >= 5);
+  await row.getByRole('button', { name: 'Pause' }).click();
+  await expect(row).toHaveAttribute('data-state', 'paused');
+  await row.getByRole('button', { name: 'Resume' }).click();
+  const { bytes } = await savedFile(worker);
+  expect(fragmentsPerTrack(bytes)).toEqual({ 1: 8, 2: 8 });
+  expect(site.hits.get('/dash/chunk-0-1.m4s')).toBe(1);
+  const twice = [...site.hits.entries()].filter(([k, n]) => k.startsWith('/dash/chunk') && n > 1);
+  expect(twice.length).toBeLessThanOrEqual(4);
+});
+
+test('on YouTube the popup says plainly that it is not supported', async ({ context, worker, id }) => {
+  await context.route('https://www.youtube.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<title>A video - YouTube</title>' }));
+  const page = await context.newPage();
+  await page.goto('https://www.youtube.com/watch?v=abc');
+  const [tab] = await worker.evaluate(() => (globalThis as Ext).chrome.tabs.query({ url: 'https://www.youtube.com/*' }));
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html#tab=${tab!.id}`);
+  await expect(popup.locator('#videos')).toBeVisible();
+  await expect(popup.locator('#videoList')).toContainText('YouTube videos are not supported in this version.');
 });

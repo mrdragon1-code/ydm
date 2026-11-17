@@ -62,8 +62,9 @@ export interface Checkpoint {
   validator: string;
   /** Byte ranges still missing, `[from, to)`; everything else is on disk. */
   missing: [number, number][];
-  /** A stream (HLS): segments before `next` are on disk, `bytes` long. */
-  hls?: { next: number; bytes: number; sizes: number[]; init?: number };
+  /** A stream (HLS, DASH): per track, the segments before `next` are on
+   * disk, `bytes` long including an init section of `init` bytes. */
+  stream?: { tracks: { next: number; bytes: number; init: number; sizes: number[] }[] };
 }
 
 /** Background → engine. */
@@ -83,8 +84,8 @@ export type EngineCommand =
       inspect?: boolean;
       /** Hash it before the check, for online lookups. */
       hashFirst?: boolean;
-      /** A stream playlist, joined into one MP4; a plain file otherwise. */
-      kind?: 'hls';
+      /** A stream (HLS playlist, DASH manifest), joined into one MP4; a plain file otherwise. */
+      kind?: 'hls' | 'dash';
     }
   /** `keep`: a pause, the partial file stays for a later resume. */
   | { type: 'cancel'; id: number; keep?: boolean }
@@ -128,6 +129,8 @@ export type WorkerCommand =
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
       limit?: number;
+      /** A stream for the stream worker: what `url` is. */
+      kind?: 'hls' | 'dash';
     }
   | { type: 'limit'; bytesPerSecond: number }
   | { type: 'connections'; max: number }
@@ -177,7 +180,7 @@ export type PopupCommand =
   /** Pasted links or links picked from a page; `referrer`: that page. */
   | { type: 'urls'; urls: string[]; referrer?: string }
   /** A video found on a page: a file, or a stream joined into one MP4. */
-  | { type: 'video'; url: string; kind: 'direct' | 'hls'; name?: string; referrer?: string }
+  | { type: 'video'; url: string; kind: 'direct' | 'hls' | 'dash'; name?: string; referrer?: string }
   /** The user's answer to a security warning. */
   | { type: 'allow'; id: number }
   | { type: 'deny'; id: number };

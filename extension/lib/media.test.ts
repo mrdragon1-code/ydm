@@ -36,7 +36,14 @@ describe('HLS playlists', () => {
       type: 'master',
       drm: false,
       variants: [
-        { url: 'https://other.example.com/1080/index.m3u8', bandwidth: 5000000, height: 1080, codecs: 'avc1.640028', separateAudio: true },
+        {
+          url: 'https://other.example.com/1080/index.m3u8',
+          bandwidth: 5000000,
+          height: 1080,
+          codecs: 'avc1.640028',
+          separateAudio: true,
+          audio: 'https://cdn.example.com/v/abc/audio/en.m3u8',
+        },
         { url: 'https://cdn.example.com/v/abc/360/index.m3u8', bandwidth: 800000, height: 360, codecs: 'avc1.4d401e,mp4a.40.2', separateAudio: false },
       ],
     });

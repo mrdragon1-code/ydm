@@ -24,6 +24,7 @@ import {
 import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } from '@/lib/protocol';
 import { Scanner } from '@/lib/scanner';
 import { incomplete, type Verdict } from '@/lib/security';
+import { parseMpd } from '@/lib/dash';
 import { type MediaFound, mediaKind, parsePlaylist, qualityOf } from '@/lib/media';
 
 /** The engine page is closed after this long with nothing to do. */
@@ -40,8 +41,8 @@ const EXTENSION_HOST = new URL(browser.runtime.getURL('/')).host;
 
 interface Entry extends Item {
   url: string;
-  /** A stream playlist (HLS), joined into one MP4 by its own worker. */
-  kind?: 'hls';
+  /** A stream (HLS playlist, DASH manifest), joined into one MP4 by its own worker. */
+  kind?: 'hls' | 'dash';
   /** Name the browser had chosen, if any. */
   hint?: string;
   /** Page the download came from; sent as Referer like the browser does. */
@@ -264,7 +265,7 @@ export default defineBackground(() => {
       if (d.tabId < 0 || d.statusCode >= 400) return undefined;
       const header = (name: string) => d.responseHeaders?.find((h) => h.name.toLowerCase() === name)?.value ?? '';
       const kind = mediaKind(d.url, header('content-type'));
-      if (kind === 'direct' || kind === 'hls') {
+      if (kind) {
         // A file is the same whatever range or start time the player asks.
         const id = kind === 'direct' ? d.url.replace(/[?#].*$/, '') : d.url;
         const seen = noted.get(d.tabId) ?? new Set<string>();
@@ -288,7 +289,7 @@ export default defineBackground(() => {
   }
 
   /** A video the page loaded, added to its tab's list. */
-  async function noteMedia(tabId: number, url: string, kind: 'direct' | 'hls', total: number | null) {
+  async function noteMedia(tabId: number, url: string, kind: 'direct' | 'hls' | 'dash', total: number | null) {
     if (covered.get(tabId)?.has(url)) return;
     const tab = await browser.tabs.get(tabId).catch(() => null);
     if (!tab || tab.incognito) return;
@@ -296,6 +297,8 @@ export default defineBackground(() => {
     if (kind === 'direct') {
       if (total === null || total < MEDIA_MIN_BYTES) return;
       found = { url, kind, title: tab.title ?? '', quality: '', size: total, drm: false, page: tab.url };
+    } else if (kind === 'dash') {
+      found = await describeDash(url, tab.title ?? '', tab.url);
     } else {
       found = await describeStream(tabId, url, tab.title ?? '', tab.url);
     }
@@ -315,6 +318,7 @@ export default defineBackground(() => {
   async function describeStream(tabId: number, url: string, title: string, page?: string): Promise<MediaFound | null> {
     const read = async (u: string) => {
       const res = await fetch(u, { credentials: 'include', cache: 'force-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return parsePlaylist(await res.text(), res.url || u);
     };
     try {
@@ -335,7 +339,29 @@ export default defineBackground(() => {
         live: media?.type === 'media' ? !media.ended : false,
         quality: qualityOf(best.height, best.bandwidth),
         size: seconds && best.bandwidth ? Math.round((best.bandwidth / 8) * seconds) : null,
-        separateAudio: best.separateAudio,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** What a DASH manifest offers: best video and audio, size, or why not. */
+  async function describeDash(url: string, title: string, page?: string): Promise<MediaFound | null> {
+    try {
+      const res = await fetch(url, { credentials: 'include', cache: 'force-cache' });
+      if (!res.ok) return null;
+      const mpd = parseMpd(await res.text(), res.url || url);
+      const base: MediaFound = { url, kind: 'dash', title, quality: '', size: null, drm: false, page };
+      if (!mpd.ok) {
+        if (mpd.reason === 'drm') return { ...base, drm: true };
+        if (mpd.reason === 'live') return { ...base, live: true };
+        return { ...base, unsupported: mpd.reason === 'webm' ? 'webm' : mpd.reason === 'unreadable' ? 'notVideo' : 'notSupported' };
+      }
+      const rate = mpd.video.bandwidth + (mpd.audio?.bandwidth ?? 0);
+      return {
+        ...base,
+        quality: qualityOf(mpd.video.height, rate),
+        size: rate && mpd.duration ? Math.round((rate / 8) * mpd.duration) : null,
       };
     } catch {
       return null;
@@ -358,7 +384,7 @@ export default defineBackground(() => {
 
   // --- queue ------------------------------------------------------------
 
-  function enqueue(url: string, hint?: string, referrer?: string, kind?: 'hls') {
+  function enqueue(url: string, hint?: string, referrer?: string, kind?: 'hls' | 'dash') {
     const id = ++nextId;
     items.set(id, {
       id,
@@ -1019,12 +1045,13 @@ export default defineBackground(() => {
         // Chosen by hand: no minimum size, as for "Download with YDM".
         for (const url of cmd.urls.filter((u) => /^https?:/i.test(u)).slice(0, 500)) {
           // A pasted stream address is downloaded as a video.
-          enqueue(url, undefined, cmd.referrer, mediaKind(url) === 'hls' ? 'hls' : undefined);
+          const stream = mediaKind(url);
+          enqueue(url, undefined, cmd.referrer, stream === 'hls' || stream === 'dash' ? stream : undefined);
         }
         return;
       case 'video':
         if (!/^https?:/i.test(cmd.url)) return;
-        enqueue(cmd.url, cmd.name, /^https?:/i.test(cmd.referrer ?? '') ? cmd.referrer : undefined, cmd.kind === 'hls' ? 'hls' : undefined);
+        enqueue(cmd.url, cmd.name, /^https?:/i.test(cmd.referrer ?? '') ? cmd.referrer : undefined, cmd.kind === 'direct' ? undefined : cmd.kind);
         return;
       case 'allow':
       case 'deny': {

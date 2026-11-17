@@ -26,8 +26,8 @@ downloads leaves your device unless you enter your own key for an online malware
   discarded. Neither the image nor its text is sent anywhere.
 - **The videos a page has loaded** (address, type, quality), for the popup's "Videos on this
   page", in memory for that tab only: forgotten when the tab moves to another page or
-  closes. To describe a stream, YDM reads its playlist from the same site, as the page's
-  player does.
+  closes. To describe a stream, YDM reads its playlist or manifest from the same site, as
+  the page's player does.
 - **YDM's own interface text translated into your language**, if you asked for it. The
   translation is made by your browser's built-in translator on your device.
 

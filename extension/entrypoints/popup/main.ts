@@ -52,19 +52,38 @@ async function showVideos() {
     : await browser.tabs.query({ active: true, currentWindow: true }).catch(() => []);
   if (tab?.id === undefined || tab.incognito) return;
   const key = `media:${tab.id}`;
-  const draw = (found: MediaFound[] | undefined) => renderVideos(found ?? []);
+  const note = platformNote(tab.url ?? '');
+  const draw = (found: MediaFound[] | undefined) => renderVideos(found ?? [], note);
   draw(((await browser.storage.session.get(key).catch(() => ({}))) as Record<string, MediaFound[]>)[key]);
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'session' && changes[key]) draw(changes[key].newValue as MediaFound[] | undefined);
   });
 }
 
+/** Sites whose videos YDM cannot see or read yet: said plainly, so that an
+ * empty list is not taken for a fault. */
+function platformNote(url: string): string | null {
+  let host = '';
+  try {
+    host = new URL(url).hostname.replace(/^(www|m)\./, '');
+  } catch {
+    return null;
+  }
+  if (host === 'youtube.com' || host === 'youtu.be' || host.endsWith('.youtube.com')) return t('popup.videoYoutube');
+  if (['facebook.com', 'fb.watch', 'instagram.com'].includes(host)) return t('popup.videoFacebook');
+  return null;
+}
+
 /** Addresses already sent this time the popup is open. */
 const added = new Set<string>();
 
-function renderVideos(found: MediaFound[]) {
-  $('videos').hidden = !found.length;
+function renderVideos(found: MediaFound[], note: string | null = null) {
+  $('videos').hidden = !found.length && !note;
+  const noteRow = document.createElement('li');
+  noteRow.className = 'video-note';
+  noteRow.textContent = note ?? '';
   $('videoList').replaceChildren(
+    ...(note ? [noteRow] : []),
     ...found.map((m) => {
       const li = document.createElement('li');
       const text = document.createElement('div');
@@ -75,11 +94,15 @@ function renderVideos(found: MediaFound[]) {
       title.title = m.title;
       const meta = document.createElement('span');
       meta.className = 'video-meta';
-      const blocked = m.drm ? t('popup.videoProtected') : m.live ? t('popup.videoLive') : '';
+      const blocked =
+        m.drm ? t('popup.videoProtected')
+        : m.live ? t('popup.videoLive')
+        : m.unsupported ? t(`reason.${m.unsupported}`)
+        : '';
       meta.textContent = [
-        m.quality || (m.kind === 'hls' ? t('popup.videoStream') : ''),
-        m.size ? `${m.kind === 'hls' ? '~' : ''}${bytes(m.size)}` : '',
-        blocked || (m.separateAudio ? t('popup.videoNoAudio') : ''),
+        m.quality || (m.kind !== 'direct' ? t('popup.videoStream') : ''),
+        m.size ? `${m.kind !== 'direct' ? '~' : ''}${bytes(m.size)}` : '',
+        blocked,
       ]
         .filter(Boolean)
         .join(' · ');
@@ -92,7 +115,7 @@ function renderVideos(found: MediaFound[]) {
       button.textContent = done ? t('popup.videoAdded') : t('popup.videoDownload');
       button.disabled = done || !!blocked;
       button.addEventListener('click', () => {
-        const ext = m.kind === 'hls' ? 'mp4' : (/\.(mp4|webm|mkv|mov)(?:$|\?)/i.exec(m.url)?.[1]?.toLowerCase() ?? 'mp4');
+        const ext = m.kind !== 'direct' ? 'mp4' : (/\.(mp4|webm|mkv|mov)(?:$|\?)/i.exec(m.url)?.[1]?.toLowerCase() ?? 'mp4');
         send({ type: 'video', url: m.url, kind: m.kind, name: videoName(m.title, ext), referrer: m.page });
         added.add(m.url);
         button.textContent = t('popup.videoAdded');

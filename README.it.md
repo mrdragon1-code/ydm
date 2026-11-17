@@ -30,9 +30,9 @@ estensione e funziona subito: niente programmi da installare, niente finestre.
   VirusTotal e abuse.ch ricevono lo SHA-256 del file e l'indirizzo (mai il file). Un virus
   noto viene eliminato, mai salvato; un download sospetto si ferma e ti chiede cosa fare.
 - **Video nelle pagine**: il popup elenca i video che la pagina sta riproducendo (qualità,
-  dimensione) e li scarica; i flussi HLS vengono uniti in un unico MP4 senza ricodifica
-  (flussi AES-128 decifrati, download riprendibili). I video protetti (DRM) e le dirette non
-  vengono mai scaricati.
+  dimensione) e li scarica; i flussi HLS e DASH, anche con video e audio separati, vengono
+  uniti in un unico MP4 senza ricodifica (flussi AES-128 decifrati, download riprendibili).
+  I video protetti (DRM) e le dirette non vengono mai scaricati; YouTube non è supportato.
 - **Link nelle immagini** (OCR): clic destro su un'immagine, o incolla uno screenshot in
   «Aggiungi URL»: il testo viene letto **sul tuo dispositivo** (Tesseract, incluso in YDM,
   non viene inviato nulla) e i link trovati si scelgono da un elenco.
