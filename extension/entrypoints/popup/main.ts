@@ -46,7 +46,24 @@ $('attentionOpen').addEventListener('click', () => {
   const id = Number($('attention').dataset.id);
   if (id) openAlert(id);
 });
-wireAdder(addButton, adder, urls, addStatus, send);
+// A pasted screenshot is read in the downloads page: the popup closes as
+// soon as it loses focus, too soon for the OCR engine.
+wireAdder(addButton, adder, urls, addStatus, send, (image) => {
+  const reader = new FileReader();
+  const failed = () => (addStatus.textContent = t('downloads.ocrFailed'));
+  reader.onerror = failed;
+  reader.onload = async () => {
+    try {
+      const id = crypto.randomUUID();
+      await browser.storage.local.set({ [`ocr:${id}`]: { src: reader.result as string } });
+      await browser.tabs.create({ url: browser.runtime.getURL(`/app.html#downloads/ocr=${id}`) });
+      window.close();
+    } catch {
+      failed();
+    }
+  };
+  reader.readAsDataURL(image);
+});
 
 $('grab').addEventListener('click', async () => {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -93,10 +110,12 @@ function render(view: View) {
   const running = view.items.filter((i) => i.state === 'running');
   const total = running.reduce((n, i) => n + i.speed, 0);
   const queued = view.items.filter((i) => i.state === 'queued').length;
-  // The total speed first: when the line is cut short, the counts go.
-  const parts: string[] = [];
-  if (total > 0) parts.push(speed(total));
-  if (running.length) parts.push(t('popup.running', { count: running.length }));
-  if (queued) parts.push(t('popup.queued', { count: queued }));
-  summary.textContent = parts.join(' · ');
+  // Two short lines beside the name: the total speed, then the counts.
+  const counts: string[] = [];
+  if (running.length) counts.push(t('popup.running', { count: running.length }));
+  if (queued) counts.push(t('popup.queued', { count: queued }));
+  const rate = total > 0 ? speed(total) : '';
+  summary.querySelector('.rate')!.textContent = rate;
+  summary.querySelector('.counts')!.textContent = counts.join(' · ');
+  summary.title = [rate, ...counts].filter(Boolean).join(' · ');
 }

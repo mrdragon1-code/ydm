@@ -200,10 +200,35 @@ h1 {
 /* --- Details ------------------------------------------------------------- */
 
 .more summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   width: fit-content;
   color: var(--text-2);
   font-size: var(--fs-sm);
+  list-style: none;
   cursor: pointer;
+}
+
+.more summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A chevron that turns down when the details open. */
+.more summary::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 2.5 8 6l-3.5 3.5'/%3E%3C/svg%3E")
+    center / 12px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 2.5 8 6l-3.5 3.5'/%3E%3C/svg%3E")
+    center / 12px no-repeat;
+  transition: transform var(--dur) var(--ease);
+}
+
+.more[open] summary::before {
+  transform: rotate(90deg);
 }
 
 .more summary:hover {

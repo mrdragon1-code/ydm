@@ -212,6 +212,7 @@ export default defineBackground(() => {
     await browser.contextMenus.removeAll();
     browser.contextMenus.create({ id: 'ydm', title: t('menu.link'), contexts: ['link'] });
     browser.contextMenus.create({ id: 'ydm-page', title: t('menu.page'), contexts: ['page'] });
+    browser.contextMenus.create({ id: 'ydm-image', title: t('menu.image'), contexts: ['image'] });
   }
 
   /** The downloads page, listing the links of `tab` to pick from. */
@@ -222,6 +223,15 @@ export default defineBackground(() => {
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'ydm-page') {
       if (tab?.id !== undefined && !tab.incognito) openGrab(tab.id);
+      return;
+    }
+    if (info.menuItemId === 'ydm-image') {
+      // The downloads page reads it, on this computer, and lists its links.
+      if (!info.srcUrl || tab?.incognito) return;
+      // One key per image: two opened in quick succession do not mix.
+      const id = crypto.randomUUID();
+      await browser.storage.local.set({ [`ocr:${id}`]: { src: info.srcUrl, page: info.pageUrl } });
+      void browser.tabs.create({ url: browser.runtime.getURL(`/app.html#downloads/ocr=${id}`) });
       return;
     }
     const url = info.linkUrl;

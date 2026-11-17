@@ -67,6 +67,10 @@ export function settingsScreens(openAlert: (id: number) => void) {
       return `var(--malachite) ${from.toFixed(2)}% calc(${to.toFixed(2)}% - 3px), transparent calc(${to.toFixed(2)}% - 3px) ${to.toFixed(2)}%`;
     });
     $('preview').style.backgroundImage = `linear-gradient(90deg, ${stops.join(', ')})`;
+    // The slider's track is filled up to the middle of its thumb (16px).
+    const [min, max] = [Number(connections.min) || 1, Number(connections.max) || 6];
+    const at = (n - min) / Math.max(1, max - min);
+    connections.style.setProperty('--fill', `calc(8px + (100% - 16px) * ${at.toFixed(4)})`);
   }
 
   /** Options whose labels depend on the language. */

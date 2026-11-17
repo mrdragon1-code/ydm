@@ -10,6 +10,8 @@ export function wireAdder(
   field: HTMLTextAreaElement,
   status: HTMLElement,
   send: (cmd: PopupCommand) => void,
+  /** A screenshot pasted or dropped in the field: read its links. */
+  onImage?: (image: Blob) => void,
 ) {
   toggle.addEventListener('click', () => {
     form.hidden = !form.hidden;
@@ -24,6 +26,24 @@ export function wireAdder(
     send({ type: 'urls', urls: found });
     field.value = '';
   });
+  if (onImage) {
+    const imageIn = (data: DataTransfer | null) => [...(data?.files ?? [])].find((f) => f.type.startsWith('image/'));
+    field.addEventListener('paste', (e) => {
+      const image = imageIn(e.clipboardData);
+      if (!image) return;
+      e.preventDefault();
+      onImage(image);
+    });
+    field.addEventListener('dragover', (e) => {
+      if ([...(e.dataTransfer?.items ?? [])].some((i) => i.kind === 'file' && i.type.startsWith('image/'))) e.preventDefault();
+    });
+    field.addEventListener('drop', (e) => {
+      const image = imageIn(e.dataTransfer);
+      if (!image) return;
+      e.preventDefault();
+      onImage(image);
+    });
+  }
   // Ctrl/Cmd+Enter sends, Enter alone makes a new line.
   field.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) form.requestSubmit();

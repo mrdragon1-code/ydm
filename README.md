@@ -40,6 +40,9 @@ Browser
   only with **your own free key**: VirusTotal and abuse.ch are asked about the file's
   SHA-256 and the address (never the file). A known virus is deleted, never saved; a
   suspicious download waits and asks you, in its own window.
+- **Links in images** (OCR): right-click an image, or paste a screenshot in "Add URLs":
+  the text is read **on your device** (Tesseract, shipped inside YDM, nothing is sent)
+  and the links found are listed to pick.
 - **Add URLs** (paste one or many) and **download all links of a page**, filtered by type.
 - **Notification** when a download finishes, with a button to show the file.
 - **Settings**: on/off, minimum size, maximum connections (1–6), simultaneous downloads,

@@ -45,3 +45,10 @@ export function duration(seconds: number): string {
 export function percent(done: number, total: number | null): string {
   return `${Math.floor((done / (total || 1)) * 100)}%`;
 }
+
+/** A reason written to follow a colon, as a sentence of its own in a list:
+ * a lowercase first letter becomes a capital. A quoted name stays as it is. */
+export function sentence(text: string): string {
+  const first = text.charAt(0);
+  return first && first !== first.toUpperCase() ? first.toUpperCase() + text.slice(1) : text;
+}

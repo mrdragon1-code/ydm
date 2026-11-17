@@ -45,10 +45,47 @@ function manifestLocales() {
   });
 }
 
+/** The OCR engine (Tesseract), shipped inside YDM so that images are read
+ * on the device: the worker, the SIMD WebAssembly build, the English model.
+ * Copied from the npm packages, not kept in the repository. */
+function ocrAssets() {
+  const from = (p: string) => path.join(import.meta.dirname, 'node_modules', p);
+  return [
+    { contents: ocrWorker(from('tesseract.js/dist/worker.min.js')), relativeDest: 'ocr/worker.min.js' },
+    { absoluteSrc: from('tesseract.js-core/tesseract-core-simd-lstm.wasm.js'), relativeDest: 'ocr/tesseract-core-simd-lstm.wasm.js' },
+    { absoluteSrc: from('@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz'), relativeDest: 'ocr/eng.traineddata.gz' },
+  ];
+}
+
+/** Tesseract's worker without its two fallbacks for engines that lack
+ * `globalThis` (none YDM supports): both build code with the Function
+ * constructor, which add-on reviews reject and our policy forbids anyway.
+ * Each must be found exactly once; a new tesseract.js that changes them
+ * stops the build, to be looked at again. */
+function ocrWorker(file: string): string {
+  let code = readFileSync(file, 'utf8');
+  const fallbacks: [dead: string, live: string][] = [
+    ['Function("r","regeneratorRuntime = r")(i)', 'void 0'],
+    ['this||new Function("return this")()', 'this'],
+  ];
+  for (const [dead, live] of fallbacks) {
+    if (code.split(dead).length !== 2) throw new Error(`tesseract.js worker changed: "${dead}" not found once`);
+    code = code.replace(dead, () => live);
+  }
+  return code;
+}
+
+/** Extension pages may compile WebAssembly (the OCR engine), nothing else. */
+const CSP = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
+
 export default defineConfig({
   // The self-updating Firefox build goes elsewhere, not to replace the AMO one.
   outDir: SELF_HOSTED ? '.selfhosted' : '.output',
   vite: () => ({
+    resolve: {
+      // Not needed by any supported browser (see lib/no-polyfill.ts).
+      alias: { 'regenerator-runtime/runtime': path.join(import.meta.dirname, 'lib/no-polyfill.ts') },
+    },
     // Seen by the code as import.meta.env.YDM_REPO.
     define: {
       'import.meta.env.YDM_REPO': JSON.stringify(REPO ?? ''),
@@ -61,7 +98,7 @@ export default defineConfig({
   webExt: { disabled: true },
   hooks: {
     'build:publicAssets': (_wxt, files) => {
-      files.push(...manifestLocales());
+      files.push(...manifestLocales(), ...ocrAssets());
     },
   },
   manifest: ({ browser }) => ({
@@ -90,6 +127,7 @@ export default defineConfig({
     ],
     // Fetching a download from any site, with that site's cookies.
     host_permissions: ['<all_urls>'],
+    content_security_policy: browser === 'firefox' ? CSP : { extension_pages: CSP },
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: {

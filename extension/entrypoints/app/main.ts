@@ -29,6 +29,9 @@ const send = connect((v) => {
   view = v;
   downloads.update(v);
   settings.renderHistory(v.items, v.changed);
+  // A full snapshot comes after the page was (re)translated: the words that
+  // depend on the settings (key states, placeholders) are written again.
+  if (!v.changed) settings.refresh();
   renderShell();
 });
 const downloads = downloadsScreen(send, openAlert);

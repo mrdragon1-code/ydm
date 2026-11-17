@@ -1,10 +1,11 @@
 /** The Downloads screen: search, filters, the list, and the details pane. */
 
 import { render as text, t } from '@/lib/i18n';
-import { collectInPage, fileLinks, type PageLink } from '@/lib/links';
+import { collectInPage, extensionOf, fileLinks, type PageLink } from '@/lib/links';
+import { linksInText } from '@/lib/ocr-links';
 import type { Item, PopupCommand } from '@/lib/protocol';
 import { wireAdder, wireRadioKeys } from '@/lib/ui/adder';
-import { bytes, duration, speed } from '@/lib/ui/format';
+import { bytes, duration, sentence, speed } from '@/lib/ui/format';
 import { actionsFor, createRow, describe, iconButton, type Row, syncList, updateShield } from '@/lib/ui/row';
 import { paint, working } from '@/lib/ui/segbar';
 import { isActive, type View } from '@/lib/ui/store';
@@ -73,14 +74,20 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
       $('emptyReset').hidden = none;
     }
     $('count').textContent = t('downloads.total', { count: view.items.length });
+    // With nothing downloaded yet, the list's empty state is the whole page:
+    // no details pane to select from, no count of zero.
+    const nothing = view.items.length === 0;
+    $('details').hidden = nothing;
+    $('listFoot').hidden = nothing;
     $('clear').hidden = !view.items.some((i) => !isActive(i) && i.state !== 'paused' && i.state !== 'held');
     const running = view.items.filter((i) => i.state === 'running');
     const queued = view.items.filter((i) => i.state === 'queued').length;
     const total = running.reduce((n, i) => n + i.speed, 0);
+    // The same order as in the popup: the total speed, then the counts.
     $('summary').textContent = [
+      total > 0 ? speed(total) : '',
       running.length ? t('popup.running', { count: running.length }) : '',
       queued ? t('popup.queued', { count: queued }) : '',
-      total > 0 ? speed(total) : '',
     ]
       .filter(Boolean)
       .join(' · ');
@@ -186,7 +193,7 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
               const source = document.createElement('span');
               source.className = 'source';
               source.textContent = ` · ${t(`security.source.${f.source}`)}`;
-              li.append(text(f.reason), source);
+              li.append(sentence(text(f.reason)), source);
               return li;
             })
           : security.level === 'clean' || security.findings.length
@@ -203,9 +210,16 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     $('dSize').textContent = item.total ? bytes(item.total) : item.done ? bytes(item.done) : '—';
     const seconds = (item.elapsed ?? 0) / 1000;
     $('dTime').textContent = seconds >= 0.5 ? duration(seconds) : '—';
-    $('dSpeed').textContent = seconds >= 0.5 && item.total ? speed(item.total / seconds) : item.speed ? speed(item.speed) : '—';
+    const average = seconds >= 0.5 && !!item.total;
+    $('dSpeed').textContent = average ? speed(item.total! / seconds) : item.speed ? speed(item.speed) : '—';
+    // While it runs, the speed is the one of this moment, not an average.
+    $('dSpeedLabel').textContent = t(average ? 'downloads.avgSpeed' : 'downloads.speedNow');
     const n = working(item.parts);
     $('dConns').textContent = item.state === 'running' && n ? String(n) : '—';
+    // A fact with no value yet is left out, not shown as a dash.
+    for (const dd of $('detailsBody').querySelectorAll<HTMLElement>('.facts dd')) {
+      dd.parentElement!.hidden = dd.textContent === '—';
+    }
 
     const hash = item.sha256;
     const known = !!hash && hash !== 'pending';
@@ -228,9 +242,10 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
         ...kinds.map((kind) => {
           const b = iconButton(kind);
           // Removing is set apart, as an icon at the end: it is not the
-          // next thing you want to do with a file.
-          b.className = kind === 'decide' ? 'button' : kind === 'remove' ? 'button quiet only-icon' : 'button quiet';
-          if (kind !== 'remove') b.append(document.createTextNode(t(`action.${kind}`)));
+          // next thing you want to do with a file. Alone, it says its name.
+          const apart = kind === 'remove' && kinds.length > 1;
+          b.className = kind === 'decide' ? 'button' : apart ? 'button quiet only-icon' : 'button quiet';
+          if (!apart) b.append(document.createTextNode(t(`action.${kind}`)));
           b.addEventListener('click', () => act(kind, item.id));
           return b;
         }),
@@ -262,7 +277,9 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     setTimeout(() => (button.textContent = t('downloads.copy')), 1500);
   });
 
-  wireAdder($<HTMLButtonElement>('add'), $<HTMLFormElement>('adder'), $<HTMLTextAreaElement>('urls'), $('addStatus'), send);
+  wireAdder($<HTMLButtonElement>('add'), $<HTMLFormElement>('adder'), $<HTMLTextAreaElement>('urls'), $('addStatus'), send, (image) =>
+    void openOcr(image),
+  );
 
   // --- links of a page ("download all links") -----------------------------
 
@@ -294,6 +311,72 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     renderGrab();
   }
 
+  /** The links written in an image, read on this computer (OCR). `image`:
+   * pasted or dropped here; none: the one chosen with the context menu. */
+  /** The latest read: an older one finishing later shows nothing. */
+  let ocrRun = 0;
+
+  async function openOcr(source: Blob | string) {
+    const run = ++ocrRun;
+    const panel = $('grab');
+    panel.hidden = false;
+    panel.focus();
+    const message = $('grabMessage');
+    $('grabTitle').textContent = t('downloads.ocrTitle');
+    picks = [];
+    pageUrl = undefined;
+    chosen.clear();
+    types.clear();
+    renderGrab();
+    message.textContent = t('downloads.ocrReading', { percent: 0 });
+    let found: PageLink[] = [];
+    try {
+      const image = typeof source === 'string' ? await requestedImage(source) : source;
+      // The engine (a few MB) loads only when an image is read.
+      const { readText } = await import('@/lib/ocr');
+      const read = await readText(image, (share) => {
+        if (run === ocrRun) message.textContent = t('downloads.ocrReading', { percent: Math.round(share * 100) });
+      });
+      if (run !== ocrRun) return;
+      found = linksInText(read).map((url) => ({ url, label: nameOf(url), ext: extensionOf(url) }));
+      message.textContent = found.length ? '' : t('downloads.ocrNone');
+    } catch {
+      if (run !== ocrRun) return;
+      message.textContent = t('downloads.ocrFailed');
+    }
+    picks = found;
+    for (const p of picks) {
+      types.add(p.ext);
+      chosen.add(p.url);
+    }
+    renderGrab();
+  }
+
+  /** The image a context menu or the popup left for this page, by id. Used
+   * once. Only web and inline images: never local files or browser pages. */
+  async function requestedImage(id: string): Promise<Blob> {
+    const key = `ocr:${id}`;
+    const stored = (await browser.storage.local.get(key))[key] as { src?: string; page?: string } | undefined;
+    await browser.storage.local.remove(key);
+    const src = stored?.src ?? '';
+    if (!/^(https?:|data:image\/)/i.test(src)) throw new Error('not a web image');
+    pageUrl = stored?.page;
+    // With the site's cookies, as when the page showed it: the same request
+    // the browser already made for that page.
+    const res = await fetch(src, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.blob();
+  }
+
+  function nameOf(url: string): string {
+    try {
+      const u = new URL(url);
+      return decodeURIComponent(u.pathname.split('/').at(-1) || u.host);
+    } catch {
+      return url;
+    }
+  }
+
   /** The links of a tab, read by a script injected for this one request. */
   async function readLinks(tabId: number): Promise<{ url: string; label: string }[]> {
     if (browser.scripting) {
@@ -307,13 +390,14 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
   }
 
   function renderGrab() {
-    const exts = [...new Set(picks.map((p) => p.ext))].sort();
+    // File types in order, then "other links" (no file extension) last.
+    const exts = [...new Set(picks.map((p) => p.ext))].sort((a, b) => (!a ? 1 : !b ? -1 : a.localeCompare(b)));
     $('grabTypes').replaceChildren(
       ...exts.map((ext) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'chip';
-        b.textContent = `.${ext} · ${picks.filter((p) => p.ext === ext).length}`;
+        b.textContent = `${ext ? `.${ext}` : t('downloads.grabOther')} · ${picks.filter((p) => p.ext === ext).length}`;
         b.setAttribute('aria-pressed', String(types.has(ext)));
         b.addEventListener('click', () => {
           if (types.has(ext)) types.delete(ext);
@@ -394,6 +478,10 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     route(arg: string | undefined) {
       const tab = /^grab=(\d+)$/.exec(arg ?? '')?.[1];
       if (tab) void openGrab(Number(tab));
+      // `#downloads/ocr=<id>`: an image chosen with "Find links in this
+      // image", or pasted in the popup.
+      const ocr = /^ocr=([\w-]{8,64})$/.exec(arg ?? '')?.[1];
+      if (ocr) void openOcr(ocr);
     },
     refresh() {
       if (view) {

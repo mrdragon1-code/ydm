@@ -468,6 +468,17 @@ body {
   outline-offset: -2px;
 }
 
+.empty-glyph {
+  width: 24px;
+  height: 24px;
+  margin-bottom: var(--space-2);
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .empty-title {
   color: var(--text);
   font-size: var(--fs-lg);
@@ -476,7 +487,7 @@ body {
 
 .empty-text {
   max-width: 44ch;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .empty-text:empty {
@@ -503,7 +514,17 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.list-foot .link[hidden] {
+.list-foot .link[hidden],
+.list-foot[hidden] {
+  display: none;
+}
+
+/* Nothing downloaded yet: the list takes the whole width. */
+.layout:has(> .details[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.details[hidden] {
   display: none;
 }
 
@@ -656,6 +677,10 @@ body {
   gap: var(--space-3);
   padding: 7px 0;
   border-bottom: 1px solid var(--border);
+}
+
+.facts > div[hidden] {
+  display: none;
 }
 
 .facts dt {
@@ -831,7 +856,7 @@ body {
 .row > select {
   max-width: min(52vw, 260px);
   min-height: var(--control-lg);
-  padding: 0 var(--space-2);
+  padding: 0 28px 0 var(--space-2);
   text-overflow: ellipsis;
   cursor: pointer;
 }
@@ -850,9 +875,12 @@ input[type='range'] {
   cursor: pointer;
 }
 
+/* The file cut into bands: an illustration of the value, quieter than the
+   slider above it. */
 .preview {
-  height: 6px;
-  margin: 2px 0 var(--space-2);
+  height: 4px;
+  margin: 6px 0 var(--space-2);
+  opacity: 0.5;
 }
 
 .add,
@@ -996,6 +1024,22 @@ input[type='range'] {
   font-weight: var(--fw-semibold);
 }
 
+/* Whether a key is set, and the way to take it out, together on the right. */
+.key-head {
+  flex-wrap: wrap;
+}
+
+.key-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.key-state .link[hidden] {
+  display: none;
+}
+
 .key > .link {
   justify-self: start;
 }
@@ -1118,12 +1162,31 @@ input[type='range'] {
     white-space: nowrap;
   }
 
+  /* Over the icon's corner, as a small pill, like the amber one. */
   .nav .count {
     position: absolute;
-    top: 4px;
-    left: calc(50% + 10px);
+    top: 3px;
+    left: calc(50% + 6px);
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 16px;
     margin: 0;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+    color: var(--text-2);
     font-size: var(--fs-xs);
+    font-weight: var(--fw-semibold);
+  }
+
+  .nav .count:empty {
+    display: none;
+  }
+
+  .nav .count.alert {
+    box-shadow: none;
   }
 
   .power {
