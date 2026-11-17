@@ -30,14 +30,6 @@ test('a newer version on disk is loaded by itself, once no YDM page is open', as
     const worker = await ydmWorker(context);
     const id = new URL(worker.url()).host;
     const before = await worker.evaluate(() => (globalThis as Ext).chrome.runtime.getManifest().version);
-
-    // What update-chrome.ps1 does last: the new manifest.
-    const file = path.join(dir, 'manifest.json');
-    const manifest = JSON.parse(readFileSync(file, 'utf8'));
-    manifest.version = '99.0.0';
-    writeFileSync(file, JSON.stringify(manifest));
-
-    // Opening a page makes it look; it waits until the page is closed.
     let reloaded = false;
     const stopped = new Promise<void>((resolve) =>
       worker.once('close', () => {
@@ -45,10 +37,28 @@ test('a newer version on disk is loaded by itself, once no YDM page is open', as
         resolve();
       }),
     );
+
+    // A YDM page open first: from now on YDM may notice the new version at
+    // any moment (its own start-up check may still be running), but it must
+    // not reload while the page is open.
     const popup = await context.newPage();
     await popup.goto(`chrome-extension://${id}/popup.html`);
+    await expect(popup.locator('#empty')).toBeVisible();
+
+    // What update-chrome.ps1 does last: the new manifest.
+    const file = path.join(dir, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(file, 'utf8'));
+    manifest.version = '99.0.0';
+    writeFileSync(file, JSON.stringify(manifest));
+
+    // Opening a page makes it look; it waits until every page is closed.
+    const second = await context.newPage();
+    await second.goto(`chrome-extension://${id}/popup.html`);
     await new Promise((r) => setTimeout(r, 1500));
     expect(reloaded).toBe(false); // not while a YDM page is open
+    await second.close();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(reloaded).toBe(false); // the first page is still open
     await popup.close();
     // runtime.reload() stops this service worker; the new version starts at
     // its next event. (Chromium driven by Playwright, unlike a real Chrome,
