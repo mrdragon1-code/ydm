@@ -155,8 +155,8 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
       return true;
     };
     switch (key) {
+      // Delete only: Backspace is too often pressed meaning "back".
       case 'Delete':
-      case 'Backspace':
         return pick('remove');
       case ' ':
         return pick('pause') || pick('resume');
@@ -179,22 +179,27 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     for (const item of view?.items.filter(retryable) ?? []) send({ type: 'retry', id: item.id });
   });
 
-  // "/" or Ctrl+F jumps to the search, as on most sites with a list.
+  /** Whether page-wide keys and pastes belong to this screen: it is shown,
+   * and the user is not typing or in a dialog. */
+  function forThisScreen(target: EventTarget | null): boolean {
+    const screen = document.querySelector<HTMLElement>('[data-view="downloads"]');
+    if (!screen || screen.hidden) return false;
+    return !(target as HTMLElement | null)?.closest('input, textarea, select, [contenteditable], dialog, [role="dialog"]');
+  }
+
+  // "/" jumps to the search, as on most sites with a list. (Ctrl+F stays
+  // the browser's own search.)
   document.addEventListener('keydown', (e) => {
-    if (document.querySelector<HTMLElement>('[data-view="downloads"]')?.hidden) return;
-    const typing = (e.target as HTMLElement).closest('input, textarea, select, [contenteditable]');
-    if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
-      e.preventDefault();
-      search.focus();
-      search.select();
-    }
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !forThisScreen(e.target)) return;
+    e.preventDefault();
+    search.focus();
+    search.select();
   });
 
   // Links or a screenshot pasted anywhere on the page (not into a field)
   // go to "Add URLs", as if pasted there.
   document.addEventListener('paste', (e) => {
-    if (document.querySelector<HTMLElement>('[data-view="downloads"]')?.hidden) return;
-    if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+    if (!forThisScreen(e.target)) return;
     const image = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
     if (image) {
       e.preventDefault();

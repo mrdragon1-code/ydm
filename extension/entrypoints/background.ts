@@ -968,16 +968,20 @@ export default defineBackground(() => {
     };
   }).onDeterminingFilename;
   determining?.addListener((d, suggest) => {
-    // YDM's own saves and hand-backs already carry their folder.
-    if (d.byExtensionId === browser.runtime.id) return void suggest();
+    // Downloads started by an extension keep the name it chose: YDM's own
+    // saves and hand-backs already carry their folder, and other
+    // extensions' choices are theirs.
+    if (d.byExtensionId) return void suggest();
+    // The answer comes after the settings are loaded; exactly once.
+    let suggestion: { filename: string; conflictAction: 'uniquify' } | undefined;
     void restored
       .then(() => {
         const name = baseName(d.filename) ?? '';
         const folder = name ? folderFor(name, d.finalUrl || d.url, settings) : '';
-        suggest(folder ? { filename: withFolder(folder, sanitize(name)), conflictAction: 'uniquify' } : undefined);
+        if (folder) suggestion = { filename: withFolder(folder, sanitize(name)), conflictAction: 'uniquify' };
       })
-      .catch(() => suggest());
-    // The answer comes after the settings are loaded.
+      .catch(() => {})
+      .finally(() => suggest(suggestion));
     return true;
   });
 

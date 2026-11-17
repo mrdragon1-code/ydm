@@ -6,7 +6,8 @@ export type Category = 'video' | 'audio' | 'images' | 'documents' | 'archives' |
 
 /** Extensions by kind, lowercase, without the dot. */
 export const EXTENSION_GROUPS: Record<Category, readonly string[]> = {
-  video: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v', 'wmv', 'flv', 'mpg', 'mpeg', 'ts', '3gp'],
+  // Not ".ts": far more often TypeScript source than a video file.
+  video: ['mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v', 'wmv', 'flv', 'mpg', 'mpeg', '3gp'],
   audio: ['mp3', 'flac', 'wav', 'ogg', 'opus', 'm4a', 'aac', 'wma', 'aiff'],
   images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'tif', 'tiff', 'psd', 'raw', 'bmp', 'svg', 'heic', 'avif'],
   documents: ['pdf', 'epub', 'djvu', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'csv', 'txt', 'rtf', 'md'],

@@ -12,12 +12,12 @@ export interface PageLink {
 
 /** Extensions offered in the "download all links" list. Pages link to
  * other pages far more than to files; only these count as files. A page
- * link ending in ".ts" or ".md" is far more often source code or text than
- * a file to keep, so those stay out of this list. */
+ * link ending in ".md" or ".txt" is far more often a text page than a file
+ * to keep, so those stay out of this list. */
 export const FILE_EXTENSIONS = new Set([
   ...Object.values(EXTENSION_GROUPS)
     .flat()
-    .filter((e) => e !== 'ts' && e !== 'md' && e !== 'txt'),
+    .filter((e) => e !== 'md' && e !== 'txt'),
   // data
   'bin', 'torrent', 'srt', 'json', 'xml', 'sql', 'db',
 ]);

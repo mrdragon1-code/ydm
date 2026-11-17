@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.0
+
+### New
+- **Folders**: downloads can be sorted into folders inside Downloads — by kind (Video,
+  Music, Images, Documents, Archives, Programs) and by your rules ("files from this site go
+  to…", "this extension goes to…"). Off until you turn it on in Settings; folder names
+  follow your language when you do. In Chrome the small files the browser keeps are sorted
+  too; in Firefox they stay in Downloads.
+- **Links in series**: `https://example.com/photo[001-120].jpg` adds photo001 … photo120
+  (also steps `[1-100:5]`, letters `[a-z]`, two ranges); at most 500 at a time.
+- Downloads page: show one kind of file only; keys (Delete removes, Space pauses or resumes,
+  R retries, Enter opens, `/` searches); "Retry failed" (also in the popup); links or a
+  screenshot pasted anywhere on the page go to "Add URLs".
+
+### Fixed
+- The popup's "Videos on this page" section is shown in your language (it was English on
+  other-language browsers).
+
 ## 1.4.0
 
 ### New

@@ -62,7 +62,12 @@ export function cleanRule(raw: unknown): FolderRule | null {
 }
 
 function hostMatches(host: string, site: string): boolean {
-  return host === site || host.endsWith(`.${site}`);
+  const h = host.replace(/\.$/, '');
+  // An address in numbers is one machine: it has no subdomains, so only an
+  // exact rule fits it (and "0.0.1" does not fit 10.0.0.1).
+  const ip = /^\d+(\.\d+){3}$/;
+  if (ip.test(h) || ip.test(site)) return h === site;
+  return h === site || h.endsWith(`.${site}`);
 }
 
 /** The folder for a file: the first rule that fits, else its kind's folder;

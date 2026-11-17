@@ -71,3 +71,16 @@ describe('where a file goes', () => {
     expect(defaultFolders((k) => k.split('.')[1]!.toUpperCase()).video).toBe('VIDEO');
   });
 });
+
+describe('site rules, edge cases', () => {
+  it('a numeric address matches only itself; a trailing dot is ignored', () => {
+    const s = on([{ kind: 'site', match: '0.0.1', folder: 'X' }, { kind: 'site', match: '10.0.0.1', folder: 'Lan' }, { kind: 'site', match: 'example.com', folder: 'Ex' }]);
+    expect(folderFor('a.bin', 'http://10.0.0.1/a.bin', s)).toBe('Lan');
+    expect(folderFor('a.bin', 'http://110.0.0.1/a.bin', s)).toBe('');
+    expect(folderFor('a.bin', 'https://example.com./a.bin', s)).toBe('Ex');
+  });
+
+  it('".ts" is not taken for a video', () => {
+    expect(folderFor('app.ts', 'https://x.example/app.ts', on())).toBe('');
+  });
+});
