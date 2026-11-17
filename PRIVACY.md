@@ -24,6 +24,10 @@ downloads leaves your device unless you enter your own key for an online malware
 - **Images you ask YDM to read for links** (right-click "Find links in this image", or a
   pasted screenshot): read on your device by the OCR engine shipped inside YDM, then
   discarded. Neither the image nor its text is sent anywhere.
+- **The videos a page has loaded** (address, type, quality), for the popup's "Videos on this
+  page", in memory for that tab only: forgotten when the tab moves to another page or
+  closes. To describe a stream, YDM reads its playlist from the same site, as the page's
+  player does.
 - **YDM's own interface text translated into your language**, if you asked for it. The
   translation is made by your browser's built-in translator on your device.
 
@@ -65,7 +69,7 @@ you or your downloads is sent.
 | Access to all sites | To download a file from whatever site it is on, with that site's cookies, as the browser does. |
 | `downloads` | To take over large downloads and to save finished files to your Downloads folder. |
 | `storage`, `unlimitedStorage` | To keep the list, the settings, and partly downloaded files of any size. |
-| `webRequest` | Only to notice when a page submits a form, so YDM leaves those downloads to the browser. |
+| `webRequest` | To notice when a page submits a form, so YDM leaves those downloads to the browser; and to notice which videos a page loads (their address and type only), to list them in the popup. Nothing is changed or sent. |
 | `declarativeNetRequestWithHostAccess` | To add the page's Referer to YDM's own requests, only for the download's site. |
 | `contextMenus` | For "Download with YDM", "Download all links with YDM" and "Find links in this image with YDM". |
 | `scripting` | To read the links of a page, only when you ask for "Download all links". |

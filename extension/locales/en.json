@@ -20,6 +20,13 @@
     "decide": "Decide"
   },
   "popup": {
+    "videos": "Videos on this page",
+    "videoDownload": "Download",
+    "videoAdded": "Added",
+    "videoProtected": "Protected (DRM): cannot be downloaded",
+    "videoLive": "Live stream: cannot be downloaded",
+    "videoNoAudio": "video only: its separate audio is not joined yet",
+    "videoStream": "stream",
     "settings": "Settings",
     "all": "All downloads",
     "toggle": "YDM on",
@@ -73,6 +80,10 @@
     "hours": "{h} h {m} min"
   },
   "reason": {
+    "protected": "the video is protected (DRM) and cannot be downloaded",
+    "live": "live streams cannot be downloaded",
+    "notVideo": "no video found at this address",
+    "decrypt": "the video could not be decrypted",
     "noSpace": "not enough disk space",
     "noSpaceNeed": "not enough disk space ({gb} GB needed)",
     "incomplete": "download incomplete",

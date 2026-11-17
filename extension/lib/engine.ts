@@ -6,6 +6,7 @@
 
 import DownloadWorker from './download-worker?worker';
 import HashWorker from './hash-worker?worker';
+import HlsWorker from './hls-worker?worker';
 import type { EngineCommand, EngineEvent, WorkerEvent } from './protocol';
 
 const DIR = 'ydm';
@@ -58,6 +59,8 @@ export class Engine {
         if (job) job.max = cmd.max;
         return job?.worker?.postMessage({ type: 'connections', max: cmd.max });
       }
+      case 'proceed':
+        return this.jobs.get(cmd.id)?.worker?.postMessage({ type: 'proceed' });
       case 'deliver':
         // The name comes along: after a restart the engine no longer has it.
         return void this.deliver(cmd.id, cmd.name, cmd.checksum);
@@ -77,8 +80,8 @@ export class Engine {
     }
   }
 
-  private async start({ id, url, name, connections, resume, limit, checksum, inspect, hashFirst }: Extract<EngineCommand, { type: 'add' }>) {
-    const worker = new DownloadWorker();
+  private async start({ id, url, name, connections, resume, limit, checksum, inspect, hashFirst, kind }: Extract<EngineCommand, { type: 'add' }>) {
+    const worker = kind === 'hls' ? new HlsWorker() : new DownloadWorker();
     const job: Job = { worker, limit, max: connections, checksum, inspect, hashFirst };
     this.jobs.set(id, job);
     await this.cleaned;
@@ -98,6 +101,7 @@ export class Engine {
       case 'capped':
       case 'progress':
       case 'checkpoint':
+      case 'origins':
         return this.emit({ ...msg, id });
       case 'done': {
         const { inspect, checksum, hashFirst } = this.jobs.get(id) ?? {};
@@ -196,11 +200,10 @@ export class Engine {
     const job = this.jobs.get(id);
     if (job?.blobUrl) URL.revokeObjectURL(job.blobUrl);
     this.jobs.delete(id);
-    try {
-      await (await this.dir()).removeEntry(fileName(id));
-    } catch {
-      // Already gone.
-    }
+    const dir = await this.dir().catch(() => null);
+    if (!dir) return;
+    // A stream also leaves its raw segments beside the file.
+    for (const name of [fileName(id), `${fileName(id)}.ts`]) await dir.removeEntry(name).catch(() => {});
   }
 
   private async removeExcept(keep: Set<string>) {
@@ -208,7 +211,8 @@ export class Engine {
       const dir = await this.dir();
       const names: string[] = [];
       for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys()) names.push(name);
-      for (const name of names) if (!keep.has(name)) await dir.removeEntry(name).catch(() => {});
+      // A kept download keeps its stream's raw segments too ("<id>.part.ts").
+      for (const name of names) if (!keep.has(name.replace(/\.ts$/, ''))) await dir.removeEntry(name).catch(() => {});
     } catch {
       // Nothing to clean.
     }

@@ -24,6 +24,7 @@ import {
 import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } from '@/lib/protocol';
 import { Scanner } from '@/lib/scanner';
 import { incomplete, type Verdict } from '@/lib/security';
+import { type MediaFound, mediaKind, parsePlaylist, qualityOf } from '@/lib/media';
 
 /** The engine page is closed after this long with nothing to do. */
 const IDLE_CLOSE_MS = 30_000;
@@ -39,6 +40,8 @@ const EXTENSION_HOST = new URL(browser.runtime.getURL('/')).host;
 
 interface Entry extends Item {
   url: string;
+  /** A stream playlist (HLS), joined into one MP4 by its own worker. */
+  kind?: 'hls';
   /** Name the browser had chosen, if any. */
   hint?: string;
   /** Page the download came from; sent as Referer like the browser does. */
@@ -241,13 +244,126 @@ export default defineBackground(() => {
     enqueue(url, undefined, info.pageUrl);
   });
 
+  // --- videos on pages -------------------------------------------------------
+
+  /** At most this many videos are listed per tab. */
+  const MEDIA_MAX = 20;
+  /** Smaller files are page decoration (loops, previews), not videos. */
+  const MEDIA_MIN_BYTES = 1024 * 1024;
+  /** Variant playlists already listed through their master, per tab. */
+  const covered = new Map<number, Set<string>>();
+  /** Addresses already looked at, per tab: a playing video requests the
+   * same file again and again (ranges, seeks), a player its playlist. */
+  const noted = new Map<number, Set<string>>();
+  /** Changes to a tab's list, one after the other: none is lost. */
+  const listChain = new Map<number, Promise<void>>();
+
+  // Watching only: what the page loads is not changed or delayed.
+  browser.webRequest.onHeadersReceived.addListener(
+    (d) => {
+      if (d.tabId < 0 || d.statusCode >= 400) return undefined;
+      const header = (name: string) => d.responseHeaders?.find((h) => h.name.toLowerCase() === name)?.value ?? '';
+      const kind = mediaKind(d.url, header('content-type'));
+      if (kind === 'direct' || kind === 'hls') {
+        // A file is the same whatever range or start time the player asks.
+        const id = kind === 'direct' ? d.url.replace(/[?#].*$/, '') : d.url;
+        const seen = noted.get(d.tabId) ?? new Set<string>();
+        if (seen.has(id) || seen.size > 200) return undefined;
+        seen.add(id);
+        noted.set(d.tabId, seen);
+        const total = Number(/\/(\d+)$/.exec(header('content-range'))?.[1] ?? header('content-length')) || null;
+        void noteMedia(d.tabId, d.url, kind, total);
+      }
+      return undefined;
+    },
+    { urls: ['<all_urls>'], types: ['media', 'xmlhttprequest', 'other'] },
+    ['responseHeaders'],
+  );
+
+  const mediaKey = (tabId: number) => `media:${tabId}`;
+
+  async function listed(tabId: number): Promise<MediaFound[]> {
+    const key = mediaKey(tabId);
+    return (((await browser.storage.session.get(key)) as Record<string, MediaFound[]>)[key] ?? []).slice();
+  }
+
+  /** A video the page loaded, added to its tab's list. */
+  async function noteMedia(tabId: number, url: string, kind: 'direct' | 'hls', total: number | null) {
+    if (covered.get(tabId)?.has(url)) return;
+    const tab = await browser.tabs.get(tabId).catch(() => null);
+    if (!tab || tab.incognito) return;
+    let found: MediaFound | null;
+    if (kind === 'direct') {
+      if (total === null || total < MEDIA_MIN_BYTES) return;
+      found = { url, kind, title: tab.title ?? '', quality: '', size: total, drm: false, page: tab.url };
+    } else {
+      found = await describeStream(tabId, url, tab.title ?? '', tab.url);
+    }
+    // Described meanwhile as a quality of a stream already listed.
+    if (!found || covered.get(tabId)?.has(url)) return;
+    const entry = found;
+    const change = (listChain.get(tabId) ?? Promise.resolve()).then(async () => {
+      const list = (await listed(tabId)).filter((m) => m.url !== url && !covered.get(tabId)?.has(m.url));
+      list.unshift(entry);
+      await browser.storage.session.set({ [mediaKey(tabId)]: list.slice(0, MEDIA_MAX) }).catch(() => {});
+    });
+    listChain.set(tabId, change.catch(() => {}));
+    await change;
+  }
+
+  /** What an HLS playlist offers: best quality, estimated size, protection. */
+  async function describeStream(tabId: number, url: string, title: string, page?: string): Promise<MediaFound | null> {
+    const read = async (u: string) => {
+      const res = await fetch(u, { credentials: 'include', cache: 'force-cache' });
+      return parsePlaylist(await res.text(), res.url || u);
+    };
+    try {
+      const p = await read(url);
+      const base: MediaFound = { url, kind: 'hls', title, quality: '', size: null, drm: p.drm, page };
+      if (p.type === 'media') return { ...base, live: !p.ended };
+      // The variants are listed through their master, not one by one.
+      const seen = covered.get(tabId) ?? new Set<string>();
+      for (const v of p.variants) seen.add(v.url);
+      covered.set(tabId, seen);
+      const best = p.variants[0];
+      if (!best) return null;
+      const media = await read(best.url).catch(() => null);
+      const seconds = media?.type === 'media' ? media.duration : 0;
+      return {
+        ...base,
+        drm: p.drm || (media?.drm ?? false),
+        live: media?.type === 'media' ? !media.ended : false,
+        quality: qualityOf(best.height, best.bandwidth),
+        size: seconds && best.bandwidth ? Math.round((best.bandwidth / 8) * seconds) : null,
+        separateAudio: best.separateAudio,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // A new page in the tab, or the tab closed: its list is gone.
+  browser.tabs.onUpdated.addListener((tabId, change) => {
+    if (!change.url) return;
+    covered.delete(tabId);
+    noted.delete(tabId);
+    void browser.storage.session.remove(mediaKey(tabId)).catch(() => {});
+  });
+  browser.tabs.onRemoved.addListener((tabId) => {
+    covered.delete(tabId);
+    noted.delete(tabId);
+    listChain.delete(tabId);
+    void browser.storage.session.remove(mediaKey(tabId)).catch(() => {});
+  });
+
   // --- queue ------------------------------------------------------------
 
-  function enqueue(url: string, hint?: string, referrer?: string) {
+  function enqueue(url: string, hint?: string, referrer?: string, kind?: 'hls') {
     const id = ++nextId;
     items.set(id, {
       id,
       url,
+      kind,
       hint,
       referrer: referrer || undefined,
       name: sanitize(hint || fromUrl(url) || ''),
@@ -294,6 +410,7 @@ export default defineBackground(() => {
           inspect: scans() && !(item.allowed && item.heldAt === 'file'),
           // Online lookups ask by hash: only then is it needed before saving.
           hashFirst: scansOnline(settings),
+          kind: item.kind,
         });
       })();
     }
@@ -397,6 +514,10 @@ export default defineBackground(() => {
         // The address is checked while the first bytes arrive.
         if (scans() && !item.allowed) void checkLink(item, event.url);
         break;
+      case 'origins':
+        // A stream's pieces on other hosts get the page's Referer too.
+        void setReferrer(item, [item.url, ...event.urls]).finally(() => void link.send({ type: 'proceed', id: item.id }));
+        return;
       case 'inspected':
         void checkFile(item, event.name, event.sha256, new Uint8Array(event.head));
         return;
@@ -897,8 +1018,13 @@ export default defineBackground(() => {
       case 'urls':
         // Chosen by hand: no minimum size, as for "Download with YDM".
         for (const url of cmd.urls.filter((u) => /^https?:/i.test(u)).slice(0, 500)) {
-          enqueue(url, undefined, cmd.referrer);
+          // A pasted stream address is downloaded as a video.
+          enqueue(url, undefined, cmd.referrer, mediaKind(url) === 'hls' ? 'hls' : undefined);
         }
+        return;
+      case 'video':
+        if (!/^https?:/i.test(cmd.url)) return;
+        enqueue(cmd.url, cmd.name, /^https?:/i.test(cmd.referrer ?? '') ? cmd.referrer : undefined, cmd.kind === 'hls' ? 'hls' : undefined);
         return;
       case 'allow':
       case 'deny': {

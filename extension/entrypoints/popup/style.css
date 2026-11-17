@@ -166,3 +166,66 @@ footer #all::after {
 footer #all:hover {
   color: var(--accent-hover);
 }
+
+/* --- Videos on this page ------------------------------------------------- */
+
+.videos {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.videos-title {
+  margin: 0 0 var(--space-2);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+}
+
+.video-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.video-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.video-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.video-title,
+.video-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.video-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.video-meta {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.video-list li[data-blocked] .video-meta {
+  color: var(--text-3);
+}

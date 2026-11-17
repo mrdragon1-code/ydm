@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0
+
+### New
+- **Videos on web pages**: while a page plays a video, YDM notices it and the popup lists it
+  under "Videos on this page", with its quality and size. One click downloads it:
+  - video files (MP4, WebM) as they are;
+  - **HLS streams** (the pieces most sites stream video in) fetched a few pieces at a time
+    and joined into **one MP4** that plays everywhere, without re-encoding; encrypted
+    AES-128 streams are decrypted; pause and resume, also after the browser is closed;
+  - a pasted `.m3u8` link is downloaded the same way.
+- **Protected videos (DRM)** — Netflix, Disney+, paid streams — are listed as protected and
+  never downloaded; live streams are not downloaded either.
+
 ## 1.2.0
 
 ### New
