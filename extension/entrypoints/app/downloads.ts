@@ -1,5 +1,6 @@
 /** The Downloads screen: search, filters, the list, and the details pane. */
 
+import { type Category, categoryOf } from '@/lib/filetypes';
 import { render as text, t } from '@/lib/i18n';
 import { collectInPage, extensionOf, fileLinks, type PageLink } from '@/lib/links';
 import { linksInText } from '@/lib/ocr-links';
@@ -20,6 +21,8 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
   const filters = $('filters');
   let view: View | null = null;
   let filter: Filter = 'all';
+  /** One kind of file only (Video, Documents, …), or all of them. */
+  let kind: Category | null = null;
   let query = '';
   let selected: number | null = null;
   const rows = new Map<number, Row>();
@@ -39,6 +42,7 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     if (filter === 'completed' && item.state !== 'completed') return false;
     if (filter === 'problems' && !['failed', 'browser', 'cancelled'].includes(item.state)) return false;
     if (filter === 'blocked' && item.state !== 'blocked' && item.security?.level !== 'malicious') return false;
+    if (kind && categoryOf(item.name) !== kind) return false;
     if (!query) return true;
     return item.name.toLowerCase().includes(query) || (item.url ?? '').toLowerCase().includes(query);
   }
@@ -80,6 +84,9 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     $('details').hidden = nothing;
     $('listFoot').hidden = nothing;
     $('clear').hidden = !view.items.some((i) => !isActive(i) && i.state !== 'paused' && i.state !== 'held');
+    $('retryAll').hidden = !view.items.some(retryable);
+    // Cut short on narrow lists: the whole hint is one hover away.
+    $('keysHint').title = t('downloads.keysHint');
     const running = view.items.filter((i) => i.state === 'running');
     const queued = view.items.filter((i) => i.state === 'queued').length;
     const total = running.reduce((n, i) => n + i.speed, 0);
@@ -95,6 +102,9 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
       const on = b.dataset.filter === filter;
       b.setAttribute('aria-checked', String(on));
       b.tabIndex = on ? 0 : -1;
+    }
+    for (const b of $('kinds').querySelectorAll<HTMLButtonElement>('button')) {
+      b.setAttribute('aria-pressed', String(b.dataset.kind === kind));
     }
     if (selected !== null && !view.items.some((i) => i.id === selected)) selected = null;
     if (selected === null || !view.changed || view.changed.has(selected)) renderDetails();
@@ -125,9 +135,89 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     else if (e.key === 'ArrowUp') go(at - 1);
     else if (e.key === 'Home') go(0);
     else if (e.key === 'End') go(all.length - 1);
-    else if (e.key === 'Enter' || e.key === ' ') select(Number(current.dataset.id), false);
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && keyAction(e.key, Number(current.dataset.id))) {
+      // Handled: a shortcut on the row (see keyAction).
+    } else if (e.key === 'Enter' || e.key === ' ') select(Number(current.dataset.id), false);
     else return;
     e.preventDefault();
+  });
+
+  /** Shortcuts on a row: Delete removes, Space pauses or resumes, R
+   * retries, Enter opens a finished file. Only what the row itself offers. */
+  function keyAction(key: string, id: number): boolean {
+    const item = view?.items.find((i) => i.id === id);
+    if (!item) return false;
+    const offered = actionsFor(item.state, true);
+    const pick = (action: string) => {
+      if (!offered.includes(action as never)) return false;
+      select(id, true);
+      act(action, id);
+      return true;
+    };
+    switch (key) {
+      case 'Delete':
+      case 'Backspace':
+        return pick('remove');
+      case ' ':
+        return pick('pause') || pick('resume');
+      case 'r':
+      case 'R':
+        return pick('retry');
+      case 'Enter':
+        return item.state === 'completed' && pick('open');
+      default:
+        return false;
+    }
+  }
+
+  /** Failed or cancelled downloads, which "Retry failed" tries again. */
+  function retryable(item: Item): boolean {
+    return item.state === 'failed' || item.state === 'cancelled';
+  }
+
+  $('retryAll').addEventListener('click', () => {
+    for (const item of view?.items.filter(retryable) ?? []) send({ type: 'retry', id: item.id });
+  });
+
+  // "/" or Ctrl+F jumps to the search, as on most sites with a list.
+  document.addEventListener('keydown', (e) => {
+    if (document.querySelector<HTMLElement>('[data-view="downloads"]')?.hidden) return;
+    const typing = (e.target as HTMLElement).closest('input, textarea, select, [contenteditable]');
+    if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f')) {
+      e.preventDefault();
+      search.focus();
+      search.select();
+    }
+  });
+
+  // Links or a screenshot pasted anywhere on the page (not into a field)
+  // go to "Add URLs", as if pasted there.
+  document.addEventListener('paste', (e) => {
+    if (document.querySelector<HTMLElement>('[data-view="downloads"]')?.hidden) return;
+    if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+    const image = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+    if (image) {
+      e.preventDefault();
+      void openOcr(image);
+      return;
+    }
+    const pasted = e.clipboardData?.getData('text') ?? '';
+    if (!/https?:\/\//i.test(pasted)) return;
+    e.preventDefault();
+    const adder = $<HTMLFormElement>('adder');
+    if (adder.hidden) $<HTMLButtonElement>('add').click();
+    const field = $<HTMLTextAreaElement>('urls');
+    field.value = field.value ? `${field.value}\n${pasted.trim()}` : pasted.trim();
+    field.focus();
+  });
+
+  $('kinds').addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-kind]');
+    if (!b) return;
+    // Pressed again: all kinds.
+    kind = kind === b.dataset.kind ? null : (b.dataset.kind as Category);
+    if (view) view.changed = new Set();
+    render();
   });
 
   search.addEventListener('input', () => {
@@ -151,6 +241,7 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
 
   $('emptyReset').addEventListener('click', () => {
     filter = 'all';
+    kind = null;
     query = '';
     search.value = '';
     if (view) view.changed = new Set();

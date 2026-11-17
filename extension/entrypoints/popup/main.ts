@@ -131,6 +131,11 @@ void showVideos();
 
 toggle.addEventListener('change', () => send({ type: 'enabled', value: toggle.checked }));
 clear.addEventListener('click', () => send({ type: 'clear' }));
+// Failed or cancelled downloads, tried again in one go.
+let retryIds: number[] = [];
+$('retryAll').addEventListener('click', () => {
+  for (const id of retryIds) send({ type: 'retry', id });
+});
 $('settings').addEventListener('click', () => openApp('settings'));
 $('all').addEventListener('click', () => openApp('downloads'));
 $('attentionOpen').addEventListener('click', () => {
@@ -197,6 +202,8 @@ function render(view: View) {
   empty.hidden = view.items.length > 0;
   hint.textContent = t('popup.hint', { size: bytes(view.minSize) });
   clear.hidden = !view.items.some((i) => !isActive(i) && i.state !== 'paused');
+  retryIds = view.items.filter((i) => i.state === 'failed' || i.state === 'cancelled').map((i) => i.id);
+  $('retryAll').hidden = retryIds.length === 0;
 
   const running = view.items.filter((i) => i.state === 'running');
   const total = running.reduce((n, i) => n + i.speed, 0);

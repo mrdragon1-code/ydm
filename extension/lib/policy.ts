@@ -1,6 +1,8 @@
 /** Which browser downloads YDM takes over, and the settings behind it.
  * Everything else is left alone. */
 
+import { PROGRAM_EXTENSIONS } from './filetypes';
+import { cleanFolder, cleanRule, type FolderRule, MAX_RULES, type Organize } from './folders';
 import type { Text } from './i18n';
 
 export interface Settings {
@@ -35,6 +37,10 @@ export interface Settings {
   abuseChKey: string;
   /** Suspicious downloads stop and ask; off, they are only marked. */
   askOnSuspicious: boolean;
+  /** Saved files go into folders inside Downloads (by kind, by rules). */
+  organize: Organize['organize'];
+  folders: Organize['folders'];
+  rules: FolderRule[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,6 +58,11 @@ export const DEFAULT_SETTINGS: Settings = {
   virusTotalKey: '',
   abuseChKey: '',
   askOnSuspicious: true,
+  // Off until the user turns it on: nobody's files move by surprise. The
+  // settings page fills the folder names in the interface's language then.
+  organize: false,
+  folders: { video: 'Video', audio: 'Music', images: 'Images', documents: 'Documents', archives: 'Archives', programs: 'Programs' },
+  rules: [],
 };
 
 export const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
@@ -96,7 +107,28 @@ export function readSettings(stored: Record<string, unknown>): Settings {
     virusTotalKey: apiKey(stored.virusTotalKey),
     abuseChKey: apiKey(stored.abuseChKey),
     askOnSuspicious: typeof stored.askOnSuspicious === 'boolean' ? stored.askOnSuspicious : d.askOnSuspicious,
+    organize: typeof stored.organize === 'boolean' ? stored.organize : d.organize,
+    folders: readFolders(stored.folders),
+    rules: Array.isArray(stored.rules)
+      ? stored.rules
+          .map(cleanRule)
+          .filter((r): r is FolderRule => r !== null)
+          .slice(0, MAX_RULES)
+      : d.rules,
   };
+}
+
+/** Each kind's folder, made safe; a missing or unusable one takes its default. */
+function readFolders(v: unknown): Settings['folders'] {
+  const out = { ...DEFAULT_SETTINGS.folders };
+  if (v && typeof v === 'object') {
+    for (const kind of Object.keys(out) as (keyof typeof out)[]) {
+      const raw = (v as Record<string, unknown>)[kind];
+      const clean = typeof raw === 'string' ? cleanFolder(raw) : null;
+      if (clean !== null) out[kind] = clean;
+    }
+  }
+  return out;
 }
 
 /** A pasted API key: printable, no spaces, of a sane length; else none. */
@@ -147,13 +179,8 @@ export function shouldIntercept(c: Candidate, s: Settings): boolean {
   );
 }
 
-/** File types Windows, macOS or Linux run directly: the ones Safe Browsing
- * checks most closely. Archives and disk images stay with YDM. */
-const PROGRAM = new Set([
-  'exe', 'msi', 'msix', 'msixbundle', 'appx', 'appxbundle', 'com', 'scr', 'pif', 'cpl',
-  'bat', 'cmd', 'ps1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta', 'lnk', 'reg',
-  'jar', 'dll', 'sys', 'apk', 'pkg', 'app', 'deb', 'rpm', 'sh', 'run', 'appimage',
-]);
+/** File types Windows, macOS or Linux run directly (lib/filetypes.ts). */
+const PROGRAM = PROGRAM_EXTENSIONS;
 
 const PROGRAM_MIME = new Set([
   'application/x-msdownload',

@@ -1,5 +1,7 @@
 /** Collecting the downloadable links of a page, and parsing pasted URLs. */
 
+import { EXTENSION_GROUPS } from './filetypes';
+
 export interface PageLink {
   url: string;
   /** Link text or file name, for the list. */
@@ -9,17 +11,13 @@ export interface PageLink {
 }
 
 /** Extensions offered in the "download all links" list. Pages link to
- * other pages far more than to files; only these count as files. */
+ * other pages far more than to files; only these count as files. A page
+ * link ending in ".ts" or ".md" is far more often source code or text than
+ * a file to keep, so those stay out of this list. */
 export const FILE_EXTENSIONS = new Set([
-  // archives and disk images
-  'zip', '7z', 'rar', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zst', 'iso', 'img', 'dmg',
-  // video and audio
-  'mp4', 'mkv', 'webm', 'avi', 'mov', 'm4v', 'mp3', 'flac', 'wav', 'ogg', 'opus', 'm4a', 'aac',
-  // documents and images
-  'pdf', 'epub', 'djvu', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'csv',
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'tif', 'tiff', 'psd', 'raw',
-  // software
-  'exe', 'msi', 'msix', 'apk', 'deb', 'rpm', 'appimage', 'pkg', 'jar',
+  ...Object.values(EXTENSION_GROUPS)
+    .flat()
+    .filter((e) => e !== 'ts' && e !== 'md' && e !== 'txt'),
   // data
   'bin', 'torrent', 'srt', 'json', 'xml', 'sql', 'db',
 ]);

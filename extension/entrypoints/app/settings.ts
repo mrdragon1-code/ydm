@@ -1,6 +1,7 @@
 /** The Settings and Security screens. Every change is saved at once. */
 
 import { bcp47, LOCALES, MACHINE_LOCALES, t } from '@/lib/i18n';
+import { type Category, cleanFolder, cleanRule, defaultFolders, MAX_RULES } from '@/lib/folders';
 import { DEFAULT_SETTINGS, LIMITS, normalizeHost, readSettings, SETTING_KEYS, type Settings } from '@/lib/policy';
 import type { Item } from '@/lib/protocol';
 import { endpoints } from '@/lib/scanner';
@@ -10,6 +11,7 @@ import { bytes, speed } from '@/lib/ui/format';
 import { createRow, type Row, syncList } from '@/lib/ui/row';
 
 const MB = 1024 * 1024;
+const CATEGORIES: Category[] = ['video', 'audio', 'images', 'documents', 'archives', 'programs'];
 const MIN_SIZES = [1, 5, 10, 25, 50, 100];
 const SPEED_LIMITS = [0, 1, 2, 5, 10, 25, 50, 100];
 
@@ -121,6 +123,78 @@ export function settingsScreens(openAlert: (id: number) => void) {
   site.addEventListener('input', () => {
     siteError.textContent = '';
     site.removeAttribute('aria-invalid');
+  });
+
+  // --- folders -------------------------------------------------------------
+
+  const organize = $<HTMLInputElement>('organize');
+  const folderError = $('folderError');
+  organize.addEventListener('change', () => {
+    // Turned on for the first time: the folders are named in the
+    // interface's language, then kept as they are.
+    const untouched = JSON.stringify(current.folders) === JSON.stringify(DEFAULT_SETTINGS.folders);
+    void save(organize.checked && untouched ? { organize: true, folders: defaultFolders(t) } : { organize: organize.checked });
+  });
+  // Firefox cannot sort the files it downloads by itself: said where it matters.
+  $('organizeFirefox').hidden = 'onDeterminingFilename' in browser.downloads;
+
+  const folderInputs = new Map<Category, HTMLInputElement>();
+  const folderNames = $('folderNames');
+  for (const kind of CATEGORIES) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const label = document.createElement('label');
+    label.htmlFor = `folder-${kind}`;
+    label.dataset.kind = kind;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = `folder-${kind}`;
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('aria-describedby', 'folderError');
+    input.addEventListener('change', () => {
+      const clean = cleanFolder(input.value);
+      if (clean === null) {
+        folderError.textContent = t('settings.folderInvalid');
+        input.setAttribute('aria-invalid', 'true');
+        input.focus();
+        return;
+      }
+      folderError.textContent = '';
+      input.removeAttribute('aria-invalid');
+      input.value = clean;
+      void save({ folders: { ...current.folders, [kind]: clean } });
+    });
+    row.append(label, input);
+    folderNames.append(row);
+    folderInputs.set(kind, input);
+  }
+
+  const ruleKind = $<HTMLSelectElement>('ruleKind');
+  const ruleMatch = $<HTMLInputElement>('ruleMatch');
+  const ruleFolder = $<HTMLInputElement>('ruleFolder');
+  const ruleError = $('ruleError');
+  $<HTMLFormElement>('addRule').addEventListener('submit', (e) => {
+    e.preventDefault();
+    // A pasted address becomes its site, as for excluded sites.
+    const match = ruleKind.value === 'site' ? (normalizeHost(ruleMatch.value) ?? ruleMatch.value) : ruleMatch.value;
+    const rule = cleanRule({ kind: ruleKind.value, match, folder: ruleFolder.value });
+    if (!rule || !rule.folder) {
+      ruleError.textContent = t('settings.ruleInvalid');
+      ruleMatch.setAttribute('aria-invalid', 'true');
+      ruleMatch.focus();
+      return;
+    }
+    ruleError.textContent = '';
+    ruleMatch.removeAttribute('aria-invalid');
+    ruleMatch.value = '';
+    ruleFolder.value = '';
+    const others = current.rules.filter((r) => !(r.kind === rule.kind && r.match === rule.match));
+    void save({ rules: [...others, rule].slice(0, MAX_RULES) });
+  });
+  ruleMatch.addEventListener('input', () => {
+    ruleError.textContent = '';
+    ruleMatch.removeAttribute('aria-invalid');
   });
 
   // Restoring takes two clicks: the button asks first, in place.
@@ -239,6 +313,31 @@ export function settingsScreens(openAlert: (id: number) => void) {
       }),
     );
     $('noSites').hidden = s.excluded.length > 0;
+
+    organize.checked = s.organize;
+    for (const [kind, input] of folderInputs) {
+      const label = input.labels?.[0];
+      if (label) label.textContent = t('settings.folderLabel', { kind: t(`kinds.${kind}`) });
+      if (document.activeElement !== input) input.value = s.folders[kind];
+      input.disabled = !s.organize;
+    }
+    $('rules').replaceChildren(
+      ...s.rules.map((rule) => {
+        const li = document.createElement('li');
+        const text = document.createElement('span');
+        const match = rule.kind === 'ext' ? `.${rule.match}` : rule.match;
+        text.textContent = t('settings.ruleText', { match, folder: rule.folder });
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'link';
+        remove.textContent = t('settings.ruleRemove');
+        remove.setAttribute('aria-label', t('settings.ruleRemoveLabel', { match }));
+        remove.addEventListener('click', () => void save({ rules: current.rules.filter((r) => r !== rule && !(r.kind === rule.kind && r.match === rule.match)) }));
+        li.append(text, remove);
+        return li;
+      }),
+    );
+    $('noRules').hidden = s.rules.length > 0;
 
     // Keys: only whether one is set; the key never comes back to the page.
     for (const service of ['virusTotal', 'abuseCh'] as Service[]) {
