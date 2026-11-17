@@ -11,9 +11,10 @@
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { savedWatcher } from './saved.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FIREFOX = process.env.FIREFOX ?? 'C:/Program Files/Mozilla Firefox/firefox.exe';
@@ -71,11 +72,12 @@ async function run(scenario) {
   );
 
   let seconds = null;
+  const saved = savedWatcher(dir, 'big.bin', SIZE_MB * 2 ** 20);
   let firstRequest = 0;
   for (const deadline = Date.now() + 60_000; Date.now() < deadline; ) {
     await new Promise((r) => setTimeout(r, 250));
     firstRequest ||= /GET \/file/.test(log) ? Date.now() : 0;
-    if (existsSync(path.join(dir, 'big.bin')) && !readdirSync(dir).some((f) => f.endsWith('.part'))) {
+    if (saved()) {
       seconds = (Date.now() - firstRequest) / 1000;
       break;
     }

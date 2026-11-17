@@ -8,9 +8,10 @@
 
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { savedWatcher } from './saved.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const FIREFOX = process.env.FIREFOX ?? 'C:/Program Files/Mozilla Firefox/firefox.exe';
@@ -77,10 +78,11 @@ try {
   // 2. Open Firefox again: YDM picks the download up on its own.
   ff = firefox(null);
   let seconds = null;
+  const saved = savedWatcher(dir, 'big.bin', SIZE_MB * 2 ** 20);
   const t = Date.now();
   for (const deadline = Date.now() + 90_000; Date.now() < deadline; ) {
     await sleep(250);
-    if (existsSync(path.join(dir, 'big.bin')) && !readdirSync(dir).some((f) => f.endsWith('.part'))) {
+    if (saved()) {
       seconds = (Date.now() - t) / 1000;
       break;
     }
@@ -93,7 +95,28 @@ try {
   // file's first byte. (How much was kept depends on how fast the machine
   // was before Firefox closed, so it is not a fixed share of the file.)
   const restarted = after.some((m) => m[1] === '0');
-  const sha = seconds === null ? null : createHash('sha256').update(readFileSync(path.join(dir, 'big.bin'))).digest('hex');
+  const read = () => readFileSync(path.join(dir, 'big.bin'));
+  const sha = seconds === null ? null : createHash('sha256').update(read()).digest('hex');
+  if (sha !== null && sha !== expectedSha) {
+    // What is wrong, and whether it was only not finished yet.
+    const expected = Buffer.from(await (await fetch(`${base}/file`)).arrayBuffer());
+    const describe = (got) => {
+      let first = -1;
+      let wrong = 0;
+      for (let i = 0; i < Math.min(got.length, expected.length); i++) {
+        if (got[i] !== expected[i]) {
+          if (first < 0) first = i;
+          wrong++;
+        }
+      }
+      return `size ${got.length}/${expected.length}, ${wrong} bytes differ, first at ${first}`;
+    };
+    console.log(`  DIAG at detection: ${describe(read())}`);
+    await sleep(3000);
+    console.log(`  DIAG 3 s later:   ${describe(read())}`);
+    console.log(`  DIAG ranges before close: ${ranged(log.slice(0, before)).map((m) => `${m[1]}-${m[2]}`).join(' ')}`);
+    console.log(`  DIAG ranges after:        ${after.map((m) => `${m[1]}-${m[2]}`).join(' ')}`);
+  }
   const checks = [
     ['file in the download folder after reopening', seconds !== null],
     ['byte-exact', sha === expectedSha],
