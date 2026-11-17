@@ -69,7 +69,10 @@ try {
   let ff = firefox(`${base}/page?auto`);
   for (const deadline = Date.now() + 60_000; ranged(log).length === 0 && Date.now() < deadline; ) await sleep(250);
   if (ranged(log).length === 0) throw new Error('YDM did not start the download');
-  await sleep(6000);
+  // Long enough for at least two checkpoints to be saved (every 3 s, then
+  // written to Firefox's storage): Firefox is killed, not closed, and a
+  // slow machine may still be writing the latest one.
+  await sleep(10_000);
   ff.kill();
   await sleep(3000);
   const before = log.length;
