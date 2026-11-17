@@ -29,6 +29,9 @@ estensione e funziona subito: niente programmi da installare, niente finestre.
   ingannevoli o fatti solo di numeri. Online, solo con **la tua chiave gratuita**:
   VirusTotal e abuse.ch ricevono lo SHA-256 del file e l'indirizzo (mai il file). Un virus
   noto viene eliminato, mai salvato; un download sospetto si ferma e ti chiede cosa fare.
+- **Link nelle immagini** (OCR): clic destro su un'immagine, o incolla uno screenshot in
+  «Aggiungi URL»: il testo viene letto **sul tuo dispositivo** (Tesseract, incluso in YDM,
+  non viene inviato nulla) e i link trovati si scelgono da un elenco.
 - **Notifica** a fine download, con il pulsante per mostrare il file.
 - **Impostazioni**: attivo/spento, dimensione minima, connessioni massime (1–6), download
   contemporanei, limite di velocità, siti esclusi e **«Lascia al browser i programmi»**.

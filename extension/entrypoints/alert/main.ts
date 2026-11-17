@@ -8,7 +8,7 @@
 import { render as text, t } from '@/lib/i18n';
 import type { Item } from '@/lib/protocol';
 import { reportUrl, type Source } from '@/lib/security';
-import { bytes } from '@/lib/ui/format';
+import { bytes, sentence } from '@/lib/ui/format';
 import { connect } from '@/lib/ui/store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -77,7 +77,7 @@ function show(item: Item) {
       const li = document.createElement('li');
       li.dataset.level = f.level;
       const what = document.createElement('span');
-      what.textContent = text(f.reason);
+      what.textContent = sentence(text(f.reason));
       const from = document.createElement('span');
       from.className = 'source';
       from.textContent = t(`security.source.${f.source}`);

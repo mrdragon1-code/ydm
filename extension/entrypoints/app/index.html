@@ -55,7 +55,7 @@
           <p id="attention" class="notice warn" hidden>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5l5 2v3.5c0 3-2.2 5-5 5.5-2.8-.5-5-2.5-5-5.5V4.5zM8 5.5v3M8 10.5v.01" /></svg>
             <span id="attentionText" class="notice-text"></span>
-            <button id="attentionOpen" class="button small" type="button" data-i18n="app.decide"></button>
+            <button id="attentionOpen" class="button quiet small" type="button" data-i18n="app.decide"></button>
           </p>
           <p id="update" class="notice" hidden>
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5v-8M4.5 9L8 5.5 11.5 9M3 2.5h10" /></svg>
@@ -86,14 +86,14 @@
             </div>
           </form>
 
-          <section id="grab" class="grab panel" hidden aria-labelledby="grabTitle">
+          <section id="grab" class="grab panel" hidden aria-labelledby="grabTitle" tabindex="-1">
             <div class="grab-head">
               <h2 id="grabTitle"></h2>
               <button id="grabClose" class="icon" type="button" data-i18n-label="action.cancel" data-i18n-title="action.cancel">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /></svg>
               </button>
             </div>
-            <p id="grabMessage" class="status"></p>
+            <p id="grabMessage" class="status" role="status"></p>
             <div id="grabTypes" class="chips" role="group" data-i18n-label="downloads.grabTypes"></div>
             <label class="check"><input type="checkbox" id="grabAll" /> <span data-i18n="downloads.grabSelectAll"></span></label>
             <ul id="grabList" class="picks"></ul>
@@ -120,11 +120,12 @@
               </div>
               <ul id="list" class="rows selectable" role="listbox" data-i18n-label="downloads.heading"></ul>
               <div id="empty" class="empty" hidden>
+                <svg class="empty-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 10.5l4 4 4-4M5 15v3.5h14V15" /></svg>
                 <p id="emptyTitle" class="empty-title"></p>
                 <p id="emptyText" class="empty-text"></p>
                 <button id="emptyReset" class="button quiet small" type="button" data-i18n="downloads.showAll" hidden></button>
               </div>
-              <footer class="list-foot">
+              <footer id="listFoot" class="list-foot">
                 <span id="count" class="status"></span>
                 <button id="clear" class="link" type="button" data-i18n="popup.clear"></button>
               </footer>
@@ -160,7 +161,7 @@
                     <dd id="dTime" class="num"></dd>
                   </div>
                   <div>
-                    <dt data-i18n="downloads.avgSpeed"></dt>
+                    <dt id="dSpeedLabel" data-i18n="downloads.avgSpeed"></dt>
                     <dd id="dSpeed" class="num"></dd>
                   </div>
                   <div>
@@ -232,7 +233,10 @@
               <form class="key" id="vtForm" data-service="virusTotal" novalidate>
                 <div class="key-head">
                   <label for="vtKey" data-i18n="security.vtLabel"></label>
-                  <span id="vtState" class="badge"></span>
+                  <span class="key-state">
+                    <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
+                    <span id="vtState" class="badge"></span>
+                  </span>
                 </div>
                 <p class="help" id="vtHelp">
                   <span data-i18n="security.vtHelp"></span>
@@ -243,13 +247,15 @@
                   <button type="submit" class="button quiet" data-i18n="security.keySave"></button>
                 </div>
                 <p id="vtError" class="error" role="alert"></p>
-                <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
               </form>
 
               <form class="key" id="acForm" data-service="abuseCh" novalidate>
                 <div class="key-head">
                   <label for="acKey" data-i18n="security.acLabel"></label>
-                  <span id="acState" class="badge"></span>
+                  <span class="key-state">
+                    <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
+                    <span id="acState" class="badge"></span>
+                  </span>
                 </div>
                 <p class="help" id="acHelp">
                   <span data-i18n="security.acHelp"></span>
@@ -260,7 +266,6 @@
                   <button type="submit" class="button quiet" data-i18n="security.keySave"></button>
                 </div>
                 <p id="acError" class="error" role="alert"></p>
-                <button type="button" class="link danger" data-remove hidden data-i18n="security.keyRemove"></button>
               </form>
             </div>
 

@@ -65,6 +65,8 @@
   --danger-soft: #fcebea;
   --unknown: #6f7683;
   --focus: #2f63d8;
+  /* The select's chevron, in --text-2 (a data URI cannot read a variable). */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23565d6b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.75 6 7.75l3-3'/%3E%3C/svg%3E");
   --shadow-sm: 0 1px 2px rgb(16 20 30 / 0.08);
   --shadow-pop: 0 1px 2px rgb(16 20 30 / 0.06), 0 6px 20px rgb(16 20 30 / 0.12);
 
@@ -142,6 +144,7 @@
     --danger-soft: #2f1817;
     --unknown: #8a909c;
     --focus: #6d9af8;
+    --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23a3a9b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.75 6 7.75l3-3'/%3E%3C/svg%3E");
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
     color-scheme: dark;
@@ -171,6 +174,7 @@
   --danger-soft: #2f1817;
   --unknown: #8a909c;
   --focus: #6d9af8;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23a3a9b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.75 6 7.75l3-3'/%3E%3C/svg%3E");
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.04), 0 8px 24px rgb(0 0 0 / 0.5);
   color-scheme: dark;
@@ -398,6 +402,95 @@ select {
   outline: 0;
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+}
+
+/* A select draws its own chevron, the same in every browser and theme. */
+select {
+  appearance: none;
+  padding-right: 28px;
+  background: var(--surface) var(--chevron) right 9px center / 12px 12px no-repeat;
+}
+
+/* The search field's clear button, as a quiet cross. */
+input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-left: var(--space-1);
+  border-radius: 50%;
+  background: var(--text-3);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M7 0a7 7 0 1 0 0 14A7 7 0 0 0 7 0zm2.6 3.7L10.3 4.4 7.7 7l2.6 2.6-.7.7L7 7.7 4.4 10.3l-.7-.7L6.3 7 3.7 4.4l.7-.7L7 6.3z'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+  cursor: pointer;
+}
+
+input[type='search']::-webkit-search-cancel-button:hover {
+  background: var(--text-2);
+}
+
+/* A slider: a thin track filled up to the thumb (--fill, set by the page),
+   and a round thumb like the switch's. */
+input[type='range'] {
+  --fill: 50%;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--accent) 0 var(--fill), var(--track) var(--fill));
+}
+
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--track);
+}
+
+input[type='range']::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform var(--dur) var(--ease);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.25);
+}
+
+input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+
+input[type='range']:focus-visible {
+  outline: 0;
+}
+
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12), 0 0 0 4px color-mix(in srgb, var(--focus) 40%, transparent);
+}
+
+input[type='range']:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12), 0 0 0 4px color-mix(in srgb, var(--focus) 40%, transparent);
 }
 
 /* On/off switch drawn on a checkbox. */

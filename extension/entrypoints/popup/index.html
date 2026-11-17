@@ -9,7 +9,7 @@
   <body>
     <header>
       <span class="mark">YDM</span>
-      <span id="summary" class="summary" aria-live="polite"></span>
+      <span id="summary" class="summary" aria-live="polite"><span class="rate"></span><span class="counts"></span></span>
       <button id="add" class="icon" type="button" data-i18n-title="popup.add" data-i18n-label="popup.add" aria-expanded="false" aria-controls="adder">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
       </button>
@@ -34,16 +34,19 @@
         <button type="submit" class="button" data-i18n="popup.addSubmit"></button>
       </div>
     </form>
-    <p id="update" class="update strip" hidden>
-      <span id="updateText"></span>
-      <a id="updateLink" class="button quiet" target="_blank" rel="noreferrer noopener" data-i18n="update.get"></a>
-    </p>
     <p id="attention" class="attention" role="alert" hidden>
       <span class="strip-text">
         <svg class="strip-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l5.5 2v4c0 3.2-2.4 5.4-5.5 6-3.1-.6-5.5-2.8-5.5-6V4zM8 5.5v3M8 10.6v.01" /></svg>
         <span id="attentionText"></span>
       </span>
       <button id="attentionOpen" class="button quiet" type="button" data-i18n="app.decide"></button>
+    </p>
+    <p id="update" class="update strip" hidden>
+      <span class="strip-text">
+        <svg class="strip-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13.5v-8M4.5 9L8 5.5 11.5 9M3 2.5h10" /></svg>
+        <span id="updateText"></span>
+      </span>
+      <a id="updateLink" class="button quiet" target="_blank" rel="noreferrer noopener" data-i18n="update.get"></a>
     </p>
     <p id="off" class="off strip" hidden data-i18n="popup.off"></p>
     <p id="notice" class="notice strip" role="status" hidden></p>

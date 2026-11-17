@@ -5,7 +5,8 @@
   },
   "menu": {
     "link": "Download with YDM",
-    "page": "Download all links with YDM"
+    "page": "Download all links with YDM",
+    "image": "Find links in this image with YDM"
   },
   "action": {
     "pause": "Pause",
@@ -31,7 +32,7 @@
     "connections": "{count} conn.",
     "connectionsTitle": "{count} parallel connections",
     "add": "Add URLs",
-    "addPlaceholder": "Paste one or more links, one per line",
+    "addPlaceholder": "Paste one or more links, one per line, or a screenshot",
     "addSubmit": "Download",
     "addInvalid": "No valid http(s) link found.",
     "addDone": {
@@ -88,7 +89,7 @@
     "serverError": "site error ({status})",
     "unexpected": "unexpected response from the site ({status})",
     "engine": "internal error ({detail})",
-    "program": "it is a program: the browser checks it with Safe Browsing",
+    "program": "programs go through the browser's Safe Browsing check",
     "browserRejected": "the browser did not accept the file",
     "saveVirus": "the antivirus blocked the file",
     "saveBlocked": "blocked by security checks",
@@ -154,12 +155,16 @@
     "filterCompleted": "Completed",
     "filterProblems": "Problems",
     "empty": "Nothing here.",
-    "total": "{count} downloads",
+    "total": {
+      "one": "{count} download",
+      "other": "{count} downloads"
+    },
     "detailsEmpty": "Select a download to see its details.",
     "url": "Address",
     "size": "Size",
     "time": "Time",
     "avgSpeed": "Average speed",
+    "speedNow": "Speed",
     "connections": "Connections",
     "sha256": "SHA-256",
     "sha256Pending": "computing…",
@@ -170,6 +175,11 @@
     "match": "Matches: the file is intact.",
     "mismatch": "Does not match: the file is different from the one the site published.",
     "grabTitle": "Links on {site}",
+    "grabOther": "other links",
+    "ocrTitle": "Links in the image",
+    "ocrReading": "Reading the image on this computer… {percent}%",
+    "ocrNone": "No links found in the image. Small or blurry text reads badly: try a sharper or larger picture.",
+    "ocrFailed": "The image could not be read.",
     "grabSelectAll": "Select all",
     "grabTypes": "Types",
     "grabSubmit": {
@@ -293,7 +303,7 @@
         "other": "{count} security services of {total} flag this address"
       }
     },
-    "timeout": "{service} did not answer in time: the file could not be checked",
+    "timeout": "{service} did not answer in time, so the file was not checked",
     "urlhaus": {
       "malware": "URLhaus lists this address as spreading malware"
     },
@@ -323,7 +333,7 @@
     "acHelp": "Public databases of malware and the addresses that spread it. Free for non-commercial use.",
     "acGet": "Get a free key",
     "keyPlaceholder": "Paste your API key",
-    "keyReplace": "Paste a new key to replace it",
+    "keyReplace": "Paste a new key",
     "keySave": "Save and test",
     "keyTesting": "Testing…",
     "keyRemove": "Remove key",

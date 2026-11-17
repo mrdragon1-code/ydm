@@ -21,17 +21,44 @@ header .mark {
   margin-right: var(--space-2);
 }
 
+/* The total speed over the counts, right-aligned against the buttons: two
+   short lines fit where one long one was cut short. */
 .summary {
   flex: 1;
+  display: grid;
+  justify-items: end;
   min-width: 0;
   margin-right: var(--space-2);
-  overflow: hidden;
-  color: var(--text-2);
-  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
+  line-height: 15px;
   text-align: right;
+}
+
+.summary > span {
+  max-width: 100%;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.summary > span:empty {
+  display: none;
+}
+
+.summary .rate {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+
+.summary .counts {
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+}
+
+/* Counts alone (nothing moving yet) read at the same size as the speed. */
+.summary .rate:empty + .counts {
+  font-size: var(--fs-sm);
 }
 
 header .divider {
@@ -104,7 +131,7 @@ header .divider {
 .empty .hint {
   max-width: 280px;
   font-size: var(--fs-sm);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 footer {

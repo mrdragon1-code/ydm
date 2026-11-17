@@ -1,6 +1,6 @@
 # YDM privacy policy
 
-_Last updated: 16 November 2026_
+_Last updated: 17 November 2026_
 
 **YDM collects no data and sends nothing to its authors.** There is no account, no
 analytics, no telemetry, no advertising and no server run by YDM. Nothing about your
@@ -21,6 +21,9 @@ downloads leaves your device unless you enter your own key for an online malware
   file or address is not asked about twice.
 - **Your VirusTotal and abuse.ch API keys**, if you entered them. They are stored only in
   the browser's extension storage and are never shown again by YDM's pages.
+- **Images you ask YDM to read for links** (right-click "Find links in this image", or a
+  pasted screenshot): read on your device by the OCR engine shipped inside YDM, then
+  discarded. Neither the image nor its text is sent anywhere.
 - **YDM's own interface text translated into your language**, if you asked for it. The
   translation is made by your browser's built-in translator on your device.
 
@@ -64,7 +67,7 @@ you or your downloads is sent.
 | `storage`, `unlimitedStorage` | To keep the list, the settings, and partly downloaded files of any size. |
 | `webRequest` | Only to notice when a page submits a form, so YDM leaves those downloads to the browser. |
 | `declarativeNetRequestWithHostAccess` | To add the page's Referer to YDM's own requests, only for the download's site. |
-| `contextMenus` | For "Download with YDM" and "Download all links with YDM". |
+| `contextMenus` | For "Download with YDM", "Download all links with YDM" and "Find links in this image with YDM". |
 | `scripting` | To read the links of a page, only when you ask for "Download all links". |
 | `alarms` | To look every half hour for a newer YDM installed in its folder, and load it. |
 | `notifications` | To tell you a download has finished, or that one was stopped by a security check. |

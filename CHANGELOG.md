@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0
+
+### New
+- **Links in images**: right-click an image → "Find links in this image with YDM", or paste
+  or drop a screenshot in "Add URLs". YDM reads the text on this computer (Tesseract,
+  shipped inside YDM: no image or text is sent anywhere), repairs typical misreadings
+  (`https : //`, an address split over two lines, the full stop after it) and lists the
+  links to pick, like "Download all links".
+
+### Changed
+- Interface polished throughout: the popup's summary on two lines instead of cut short,
+  the connections slider filled up to its handle, reasons in the warning window as
+  sentences, the settings' texts redrawn when the language changes, details aligned.
+
 ## 1.1.2
 
 ### Fixed
