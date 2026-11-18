@@ -31,15 +31,59 @@ interface Site {
   /** Requests per path, to tell what was fetched again. */
   hits: Map<string, number>;
   slow: boolean;
+  /** Paths whose first request hangs (a stuck connection); later ones are quick. */
+  stuckOnce: Set<string>;
+  /** Range requests per path. */
+  ranged: Map<string, number>;
 }
 
+/** A whole track in one file, as a DASH site with SegmentBase serves it:
+ * init, a large padding box, then the fragments. Built from the fixtures. */
+function singleFile(track: 0 | 1): Buffer {
+  const dir = path.join(FIXTURES, 'dash');
+  const chunks = readdirSync(dir)
+    .filter((f) => f.startsWith(`chunk-${track}-`))
+    .sort((a, b) => Number(/-(\d+)\.m4s$/.exec(a)![1]) - Number(/-(\d+)\.m4s$/.exec(b)![1]));
+  const pad = Buffer.alloc(track === 0 ? 10 * 1024 * 1024 : 8);
+  pad.writeUInt32BE(pad.length, 0);
+  pad.write('free', 4, 'latin1');
+  return Buffer.concat([readFileSync(path.join(dir, `init-${track}.m4s`)), pad, ...chunks.map((f) => readFileSync(path.join(dir, f)))]);
+}
+
+const SINGLE_MPD = `<?xml version="1.0"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT8.0S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011">
+  <Period>
+    <AdaptationSet contentType="video"><Representation id="v" mimeType="video/mp4" codecs="avc1.42c00a" bandwidth="39278" width="160" height="90"><BaseURL>video.mp4</BaseURL></Representation></AdaptationSet>
+    <AdaptationSet contentType="audio"><Representation id="a" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="32000"><BaseURL>audio.mp4</BaseURL></Representation></AdaptationSet>
+  </Period>
+</MPD>`;
+
 function startSite(): Promise<{ site: Site; server: Server }> {
-  const site: Site = { base: '', hits: new Map(), slow: false };
+  const site: Site = { base: '', hits: new Map(), slow: false, stuckOnce: new Set(), ranged: new Map() };
+  const single = { '/single/video.mp4': singleFile(0), '/single/audio.mp4': singleFile(1) } as Record<string, Buffer>;
   const fixture = (p: string) => readFileSync(path.join(FIXTURES, p));
   const server = createServer(async (req, res) => {
     const url = new URL(req.url!, 'http://x');
     const p = url.pathname;
     site.hits.set(p, (site.hits.get(p) ?? 0) + 1);
+    if (site.stuckOnce.delete(p)) await new Promise((r) => setTimeout(r, 60_000));
+    if (p === '/single/manifest.mpd') {
+      res.writeHead(200, { 'Content-Type': 'application/dash+xml' });
+      return res.end(SINGLE_MPD);
+    }
+    const whole = single[p];
+    if (whole) {
+      const m = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range ?? '');
+      if (!m) {
+        res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': whole.length, 'Accept-Ranges': 'bytes' });
+        return res.end(whole);
+      }
+      site.ranged.set(p, (site.ranged.get(p) ?? 0) + 1);
+      const from = Number(m[1]);
+      const to = Math.min(whole.length - 1, m[2] ? Number(m[2]) : whole.length - 1);
+      res.writeHead(206, { 'Content-Type': 'video/mp4', 'Content-Length': to - from + 1, 'Content-Range': `bytes ${from}-${to}/${whole.length}` });
+      return res.end(whole.subarray(from, to + 1));
+    }
     const send = (type: string, body: Buffer | string) => {
       res.writeHead(200, { 'Content-Type': type, 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' });
       res.end(body);
@@ -298,7 +342,8 @@ test('a stream paused halfway resumes without fetching its segments again', asyn
   await popup.locator('#urls').fill(`${site.base}/hls-ts/index.m3u8`);
   await popup.getByRole('button', { name: 'Download', exact: true }).click();
   const row = popup.locator('#list li').first();
-  await until(async () => [...site.hits.keys()].filter((k) => k.startsWith('/hls-ts/seg')).length, (n) => n >= 6);
+  // Six at once: past nine requests, the first ones are on disk.
+  await until(async () => [...site.hits.keys()].filter((k) => k.startsWith('/hls-ts/seg')).length, (n) => n >= 9);
   await row.getByRole('button', { name: 'Pause' }).click();
   await expect(row).toHaveAttribute('data-state', 'paused');
   await new Promise((r) => setTimeout(r, 1500));
@@ -307,7 +352,7 @@ test('a stream paused halfway resumes without fetching its segments again', asyn
   expect(mp4Structure(bytes).tracks).toBe(2);
   // The first segments were on disk: not one of them was fetched twice.
   const twice = [...site.hits.entries()].filter(([k, n]) => k.startsWith('/hls-ts/seg') && n > 1).map(([k]) => k);
-  expect(twice.length).toBeLessThanOrEqual(4); // at most the ones in flight at the pause
+  expect(twice.length).toBeLessThanOrEqual(6); // at most the ones in flight at the pause
   expect(site.hits.get('/hls-ts/seg0.m2ts')).toBe(1);
 });
 
@@ -351,7 +396,7 @@ test('a DASH video paused halfway resumes both tracks where they were', async ({
   await popup.locator('#urls').fill(`${site.base}/dash/manifest.mpd`);
   await popup.getByRole('button', { name: 'Download', exact: true }).click();
   const row = popup.locator('#list li').first();
-  await until(async () => [...site.hits.keys()].filter((k) => k.startsWith('/dash/chunk-0-')).length, (n) => n >= 5);
+  await until(async () => [...site.hits.keys()].filter((k) => k.startsWith('/dash/chunk-0-')).length, (n) => n >= 6);
   await row.getByRole('button', { name: 'Pause' }).click();
   await expect(row).toHaveAttribute('data-state', 'paused');
   await row.getByRole('button', { name: 'Resume' }).click();
@@ -359,7 +404,36 @@ test('a DASH video paused halfway resumes both tracks where they were', async ({
   expect(fragmentsPerTrack(bytes)).toEqual({ 1: 8, 2: 8 });
   expect(site.hits.get('/dash/chunk-0-1.m4s')).toBe(1);
   const twice = [...site.hits.entries()].filter(([k, n]) => k.startsWith('/dash/chunk') && n > 1);
-  expect(twice.length).toBeLessThanOrEqual(4);
+  expect(twice.length).toBeLessThanOrEqual(6);
+});
+
+test('a segment that hangs does not hold the stream up: it is asked for again', async ({ context, worker, id, site }) => {
+  site.stuckOnce.add('/hls-ts/seg3.m2ts');
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  await popup.locator('#add').click();
+  await popup.locator('#urls').fill(`${site.base}/hls-ts/index.m3u8`);
+  const started = Date.now();
+  await popup.getByRole('button', { name: 'Download', exact: true }).click();
+  const { bytes } = await savedFile(worker);
+  // The stuck request would take a minute; a second one answers at once.
+  expect(Date.now() - started).toBeLessThan(20_000);
+  expect(site.hits.get('/hls-ts/seg3.m2ts')).toBe(2);
+  expect(mp4Structure(bytes).tracks).toBe(2);
+});
+
+test('a DASH track that is one big file is fetched in pieces at once', async ({ context, worker, id, site }) => {
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  await popup.locator('#add').click();
+  await popup.locator('#urls').fill(`${site.base}/single/manifest.mpd`);
+  await popup.getByRole('button', { name: 'Download', exact: true }).click();
+  const { bytes } = await savedFile(worker);
+  expect(mp4Structure(bytes).tracks).toBe(2);
+  expect(fragmentsPerTrack(bytes)).toEqual({ 1: 8, 2: 8 });
+  // 10 MB of video in 4 MB pieces (plus the size check); the small audio
+  // file stays one stream.
+  expect(site.ranged.get('/single/video.mp4')).toBeGreaterThanOrEqual(4);
 });
 
 test('on YouTube the popup says plainly that it is not supported', async ({ context, worker, id }) => {
