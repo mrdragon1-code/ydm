@@ -372,3 +372,15 @@ test('on YouTube the popup says plainly that it is not supported', async ({ cont
   await expect(popup.locator('#videos')).toBeVisible();
   await expect(popup.locator('#videoList')).toContainText('YouTube videos are not supported in this version.');
 });
+
+test('the videos section follows the language once it has loaded (Italian)', async ({ context, worker, id }) => {
+  await worker.evaluate(() => (globalThis as unknown as { chrome: { storage: { local: { set(v: object): Promise<void> } } } }).chrome.storage.local.set({ language: 'it' }));
+  await context.route('https://www.youtube.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<title>Un video - YouTube</title>' }));
+  const page = await context.newPage();
+  await page.goto('https://www.youtube.com/watch?v=abc');
+  const [tab] = await worker.evaluate(() => (globalThis as Ext).chrome.tabs.query({ url: 'https://www.youtube.com/*' }));
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html#tab=${tab!.id}`);
+  await expect(popup.locator('#videosTitle')).toHaveText('Video in questa pagina');
+  await expect(popup.locator('#videoList')).toContainText('I video di YouTube non sono supportati in questa versione.');
+});

@@ -20,6 +20,7 @@
     "decide": "Decide"
   },
   "popup": {
+    "addTruncated": "{count} downloads added: only the first {max} links of a series are taken.",
     "videos": "Videos on this page",
     "videoDownload": "Download",
     "videoAdded": "Added",
@@ -116,7 +117,43 @@
     "blocked": "a known virus: deleted, never saved",
     "denied": "not downloaded, at your request"
   },
+  "kinds": {
+    "video": "Videos",
+    "audio": "Music and audio",
+    "images": "Pictures",
+    "documents": "Documents",
+    "archives": "Archives",
+    "programs": "Programs"
+  },
+  "folders": {
+    "video": "Video",
+    "audio": "Music",
+    "images": "Images",
+    "documents": "Documents",
+    "archives": "Archives",
+    "programs": "Programs"
+  },
   "settings": {
+    "folders": "Folders",
+    "foldersHelp": "Sort what you download into folders inside your Downloads folder.",
+    "organize": "Sort into folders",
+    "organizeHelp": "Each kind of file goes to its folder; the rules below come first. Leave a folder empty to keep that kind in Downloads itself.",
+    "organizeFirefox": "In Firefox, files the browser downloads by itself (small files, programs, excluded sites) stay in Downloads.",
+    "folderLabel": "Folder for {kind}",
+    "folderInvalid": "Not a usable folder name: up to two levels, like \"Work/PDF\".",
+    "ruleKind": "Rule applies to",
+    "ruleSite": "Files from the site",
+    "ruleExt": "Files with the extension",
+    "ruleMatch": "Site or extension",
+    "ruleMatchPlaceholder": "example.com or pdf",
+    "ruleFolder": "Folder",
+    "ruleFolderPlaceholder": "Folder, e.g. Work/PDF",
+    "ruleAdd": "Add rule",
+    "ruleInvalid": "Write a site (example.com) or an extension (pdf), and a folder name.",
+    "ruleText": "{match} → {folder}",
+    "ruleRemove": "Remove",
+    "ruleRemoveLabel": "Remove the rule for {match}",
+    "noRules": "No rules: files are sorted by kind.",
     "title": "YDM settings",
     "heading": "Settings",
     "saved": "Saved",
@@ -159,6 +196,9 @@
     "resetHelp": "Your API keys are kept."
   },
   "downloads": {
+    "kinds": "Show only one kind of file",
+    "retryAll": "Retry failed",
+    "keysHint": "Keys: Delete removes, Space pauses or resumes, R retries, Enter opens, / searches.",
     "title": "YDM downloads",
     "heading": "Downloads",
     "search": "Search downloads",

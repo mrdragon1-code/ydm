@@ -47,6 +47,9 @@ Browser
 - **Links in images** (OCR): right-click an image, or paste a screenshot in "Add URLs":
   the text is read **on your device** (Tesseract, shipped inside YDM, nothing is sent)
   and the links found are listed to pick.
+- **Folders** (optional): files sorted into Video, Music, Documents… inside Downloads, and
+  rules per site or extension.
+- **Links in series**: `photo[001-120].jpg` adds the whole series.
 - **Add URLs** (paste one or many) and **download all links of a page**, filtered by type.
 - **Notification** when a download finishes, with a button to show the file.
 - **Settings**: on/off, minimum size, maximum connections (1–6), simultaneous downloads,

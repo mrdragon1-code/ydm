@@ -117,6 +117,14 @@
                   <button type="button" role="radio" data-filter="problems" data-i18n="downloads.filterProblems"></button>
                   <button type="button" role="radio" data-filter="blocked" data-i18n="downloads.filterBlocked"></button>
                 </div>
+                <div id="kinds" class="kinds" role="group" data-i18n-label="downloads.kinds">
+                  <button type="button" class="chip" data-kind="video" aria-pressed="false" data-i18n="kinds.video"></button>
+                  <button type="button" class="chip" data-kind="audio" aria-pressed="false" data-i18n="kinds.audio"></button>
+                  <button type="button" class="chip" data-kind="images" aria-pressed="false" data-i18n="kinds.images"></button>
+                  <button type="button" class="chip" data-kind="documents" aria-pressed="false" data-i18n="kinds.documents"></button>
+                  <button type="button" class="chip" data-kind="archives" aria-pressed="false" data-i18n="kinds.archives"></button>
+                  <button type="button" class="chip" data-kind="programs" aria-pressed="false" data-i18n="kinds.programs"></button>
+                </div>
               </div>
               <ul id="list" class="rows selectable" role="listbox" data-i18n-label="downloads.heading"></ul>
               <div id="empty" class="empty" hidden>
@@ -127,6 +135,8 @@
               </div>
               <footer id="listFoot" class="list-foot">
                 <span id="count" class="status"></span>
+                <span id="keysHint" class="keys-hint" data-i18n="downloads.keysHint"></span>
+                <button id="retryAll" class="link" type="button" data-i18n="downloads.retryAll" hidden></button>
                 <button id="clear" class="link" type="button" data-i18n="popup.clear"></button>
               </footer>
             </section>
@@ -325,6 +335,38 @@
               </form>
               <ul id="excluded" class="sites"></ul>
               <p id="noSites" class="panel-empty" data-i18n="settings.noSites"></p>
+            </div>
+          </section>
+
+          <section class="group" aria-labelledby="foldersTitle">
+            <h2 id="foldersTitle" class="group-title" data-i18n="settings.folders"></h2>
+            <p class="help group-lead" data-i18n="settings.foldersHelp"></p>
+            <div class="panel">
+              <div class="row">
+                <label for="organize" data-i18n="settings.organize"></label>
+                <input type="checkbox" id="organize" class="switch" role="switch" aria-describedby="organizeHelp" />
+                <p id="organizeHelp" class="help" data-i18n="settings.organizeHelp"></p>
+              </div>
+              <div id="folderNames"></div>
+              <p id="folderError" class="error panel-note" role="alert"></p>
+              <p id="organizeFirefox" class="help panel-note" data-i18n="settings.organizeFirefox" hidden></p>
+            </div>
+            <div class="panel">
+              <form id="addRule" class="add rule-add" novalidate>
+                <label for="ruleKind" class="visually-hidden" data-i18n="settings.ruleKind"></label>
+                <select id="ruleKind">
+                  <option value="site" data-i18n="settings.ruleSite"></option>
+                  <option value="ext" data-i18n="settings.ruleExt"></option>
+                </select>
+                <label for="ruleMatch" class="visually-hidden" data-i18n="settings.ruleMatch"></label>
+                <input id="ruleMatch" type="text" autocomplete="off" spellcheck="false" aria-describedby="ruleError" data-i18n-placeholder="settings.ruleMatchPlaceholder" />
+                <label for="ruleFolder" class="visually-hidden" data-i18n="settings.ruleFolder"></label>
+                <input id="ruleFolder" type="text" autocomplete="off" spellcheck="false" aria-describedby="ruleError" data-i18n-placeholder="settings.ruleFolderPlaceholder" />
+                <button type="submit" class="button quiet" data-i18n="settings.ruleAdd"></button>
+                <p id="ruleError" class="error" role="alert"></p>
+              </form>
+              <ul id="rules" class="sites"></ul>
+              <p id="noRules" class="panel-empty" data-i18n="settings.noRules"></p>
             </div>
           </section>
 

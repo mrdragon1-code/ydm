@@ -52,13 +52,23 @@ async function showVideos() {
     : await browser.tabs.query({ active: true, currentWindow: true }).catch(() => []);
   if (tab?.id === undefined || tab.incognito) return;
   const key = `media:${tab.id}`;
-  const note = platformNote(tab.url ?? '');
-  const draw = (found: MediaFound[] | undefined) => renderVideos(found ?? [], note);
+  videosPage = tab.url ?? '';
+  const draw = (found: MediaFound[] | undefined) => {
+    videosFound = found ?? [];
+    renderVideos();
+  };
   draw(((await browser.storage.session.get(key).catch(() => ({}))) as Record<string, MediaFound[]>)[key]);
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'session' && changes[key]) draw(changes[key].newValue as MediaFound[] | undefined);
   });
 }
+
+/** What the videos section shows, kept so that it is drawn again in the
+ * right language once the page's language has loaded (or changes). */
+let videosPage: string | null = null;
+let videosFound: MediaFound[] = [];
+/** The language the videos section was last drawn in. */
+let videosLang = '';
 
 /** Sites whose videos YDM cannot see or read yet: said plainly, so that an
  * empty list is not taken for a fault. */
@@ -77,7 +87,11 @@ function platformNote(url: string): string | null {
 /** Addresses already sent this time the popup is open. */
 const added = new Set<string>();
 
-function renderVideos(found: MediaFound[], note: string | null = null) {
+/** Translated now, not when the list arrived: the language may load later. */
+function renderVideos() {
+  if (videosPage === null) return;
+  const found = videosFound;
+  const note = platformNote(videosPage);
   $('videos').hidden = !found.length && !note;
   const noteRow = document.createElement('li');
   noteRow.className = 'video-note';
@@ -131,6 +145,11 @@ void showVideos();
 
 toggle.addEventListener('change', () => send({ type: 'enabled', value: toggle.checked }));
 clear.addEventListener('click', () => send({ type: 'clear' }));
+// Failed or cancelled downloads, tried again in one go.
+let retryIds: number[] = [];
+$('retryAll').addEventListener('click', () => {
+  for (const id of retryIds) send({ type: 'retry', id });
+});
 $('settings').addEventListener('click', () => openApp('settings'));
 $('all').addEventListener('click', () => openApp('downloads'));
 $('attentionOpen').addEventListener('click', () => {
@@ -196,7 +215,16 @@ function render(view: View) {
   );
   empty.hidden = view.items.length > 0;
   hint.textContent = t('popup.hint', { size: bytes(view.minSize) });
+  // The videos section again once the page's language has loaded or
+  // changed (not on every update: its buttons would be replaced under the
+  // pointer).
+  if (document.documentElement.lang !== videosLang) {
+    videosLang = document.documentElement.lang;
+    renderVideos();
+  }
   clear.hidden = !view.items.some((i) => !isActive(i) && i.state !== 'paused');
+  retryIds = view.items.filter((i) => i.state === 'failed' || i.state === 'cancelled').map((i) => i.id);
+  $('retryAll').hidden = retryIds.length === 0;
 
   const running = view.items.filter((i) => i.state === 'running');
   const total = running.reduce((n, i) => n + i.speed, 0);

@@ -20,6 +20,7 @@
     "decide": "Decidi"
   },
   "popup": {
+    "addTruncated": "{count} download aggiunti: di una serie si prendono solo i primi {max} link.",
     "videos": "Video in questa pagina",
     "videoDownload": "Scarica",
     "videoAdded": "Aggiunto",
@@ -111,7 +112,43 @@
     "blocked": "un virus noto: cancellato, mai salvato",
     "denied": "non scaricato, come hai chiesto"
   },
+  "kinds": {
+    "video": "Video",
+    "audio": "Musica e audio",
+    "images": "Immagini",
+    "documents": "Documenti",
+    "archives": "Archivi",
+    "programs": "Programmi"
+  },
+  "folders": {
+    "video": "Video",
+    "audio": "Musica",
+    "images": "Immagini",
+    "documents": "Documenti",
+    "archives": "Archivi",
+    "programs": "Programmi"
+  },
   "settings": {
+    "folders": "Cartelle",
+    "foldersHelp": "Ordina ciò che scarichi in cartelle dentro la cartella Download.",
+    "organize": "Ordina in cartelle",
+    "organizeHelp": "Ogni tipo di file va nella sua cartella; le regole qui sotto hanno la precedenza. Lascia vuota una cartella per tenere quel tipo direttamente in Download.",
+    "organizeFirefox": "In Firefox, i file che il browser scarica da solo (file piccoli, programmi, siti esclusi) restano in Download.",
+    "folderLabel": "Cartella per {kind}",
+    "folderInvalid": "Nome di cartella non utilizzabile: al massimo due livelli, come \"Lavoro/PDF\".",
+    "ruleKind": "La regola vale per",
+    "ruleSite": "I file dal sito",
+    "ruleExt": "I file con l'estensione",
+    "ruleMatch": "Sito o estensione",
+    "ruleMatchPlaceholder": "esempio.it o pdf",
+    "ruleFolder": "Cartella",
+    "ruleFolderPlaceholder": "Cartella, es. Lavoro/PDF",
+    "ruleAdd": "Aggiungi regola",
+    "ruleInvalid": "Scrivi un sito (esempio.it) o un'estensione (pdf), e il nome di una cartella.",
+    "ruleText": "{match} → {folder}",
+    "ruleRemove": "Rimuovi",
+    "ruleRemoveLabel": "Rimuovi la regola per {match}",
+    "noRules": "Nessuna regola: i file sono ordinati per tipo.",
     "title": "Impostazioni di YDM",
     "heading": "Impostazioni",
     "saved": "Salvato",
@@ -154,6 +191,9 @@
     "resetHelp": "Le tue chiavi API restano salvate."
   },
   "downloads": {
+    "kinds": "Mostra un solo tipo di file",
+    "retryAll": "Riprova i falliti",
+    "keysHint": "Tasti: Canc rimuove, Spazio mette in pausa o riprende, R riprova, Invio apre, / cerca.",
     "title": "Download di YDM",
     "heading": "Download",
     "search": "Cerca nei download",

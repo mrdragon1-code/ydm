@@ -25,6 +25,8 @@ import type { Checkpoint, EngineEvent, Item, PopupCommand, PopupState, Reason } 
 import { Scanner } from '@/lib/scanner';
 import { incomplete, type Verdict } from '@/lib/security';
 import { parseMpd } from '@/lib/dash';
+import { extOfName } from '@/lib/filetypes';
+import { folderFor, withFolder } from '@/lib/folders';
 import { type MediaFound, mediaKind, parsePlaylist, qualityOf } from '@/lib/media';
 
 /** The engine page is closed after this long with nothing to do. */
@@ -590,7 +592,7 @@ export default defineBackground(() => {
         clearReferrer(item.id);
         if (event.retryInBrowser) {
           item.reason = event.reason;
-          handBack(item.url);
+          handBack(item.url, item.name);
           item.state = 'browser';
         } else {
           item.state = 'failed';
@@ -608,7 +610,7 @@ export default defineBackground(() => {
           hold(item, 'link');
         } else if (item.toBrowser) {
           item.reason = item.toBrowser;
-          handBack(item.url);
+          handBack(item.url, item.name);
           item.state = 'browser';
         } else if (item.pausing) {
           item.pausing = false;
@@ -842,7 +844,11 @@ export default defineBackground(() => {
   /** The browser copies the finished file into Downloads, choosing the final
    * name and applying Mark-of-the-Web and Safe Browsing like any download. */
   async function save(item: Entry, blobUrl: string, name: string) {
-    for (const filename of [name, undefined]) {
+    // In its folder if sorting is on; if the browser refuses that path, in
+    // Downloads itself; if it refuses the name too, under its own name.
+    const folder = folderFor(name, item.finalUrl ?? item.url, settings);
+    const candidates = [...new Set([withFolder(folder, name), name])];
+    for (const filename of [...candidates, undefined]) {
       try {
         const downloadId = await browser.downloads.download({
           url: blobUrl,
@@ -859,7 +865,7 @@ export default defineBackground(() => {
       }
     }
     item.reason = { key: 'reason.browserRejected' };
-    handBack(item.url);
+    handBack(item.url, item.name);
     item.state = 'browser';
     void link.send({ type: 'release', id: item.id });
     update();
@@ -883,7 +889,7 @@ export default defineBackground(() => {
       // Often a security check: the browser downloads it again itself and
       // shows its own warning, so the user decides as without YDM.
       item.reason = describeSaveError(error);
-      handBack(item.url);
+      handBack(item.url, item.name);
       item.state = 'browser';
     }
     update();
@@ -942,10 +948,42 @@ export default defineBackground(() => {
   browser.notifications.onClicked.addListener(showFromNotification);
   browser.notifications.onButtonClicked?.addListener((id) => showFromNotification(id));
 
-  function handBack(url: string) {
+  /** The browser downloads it itself. With a known name, into the same
+   * folder YDM would have used; the browser's own choice if it refuses. */
+  function handBack(url: string, name?: string) {
     handedBack.add(url);
-    void browser.downloads.download({ url }).catch(() => handedBack.delete(url));
+    // Only a real file name (one with an extension), never a placeholder.
+    const folder = name && extOfName(name) ? folderFor(name, url, settings) : '';
+    const plain = () => browser.downloads.download({ url });
+    const sorted = folder && name ? browser.downloads.download({ url, filename: withFolder(folder, name) }).catch(plain) : plain();
+    void sorted.catch(() => handedBack.delete(url));
   }
+
+  // Chrome only (Firefox has no such event): downloads the browser keeps
+  // for itself (small files, programs, excluded sites) go into their folder
+  // too. Called for every download, so it always answers, and fast.
+  const determining = (browser.downloads as unknown as {
+    onDeterminingFilename?: {
+      addListener(cb: (d: Browser.downloads.DownloadItem, suggest: (s?: { filename: string; conflictAction: 'uniquify' }) => void) => boolean | void): void;
+    };
+  }).onDeterminingFilename;
+  determining?.addListener((d, suggest) => {
+    // Downloads started by an extension keep the name it chose: YDM's own
+    // saves and hand-backs already carry their folder, and other
+    // extensions' choices are theirs.
+    if (d.byExtensionId) return void suggest();
+    // The answer comes after the settings are loaded; exactly once.
+    let suggestion: { filename: string; conflictAction: 'uniquify' } | undefined;
+    void restored
+      .then(() => {
+        const name = baseName(d.filename) ?? '';
+        const folder = name ? folderFor(name, d.finalUrl || d.url, settings) : '';
+        if (folder) suggestion = { filename: withFolder(folder, sanitize(name)), conflictAction: 'uniquify' };
+      })
+      .catch(() => {})
+      .finally(() => suggest(suggestion));
+    return true;
+  });
 
   // --- popup --------------------------------------------------------------
 

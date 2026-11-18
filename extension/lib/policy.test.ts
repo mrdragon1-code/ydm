@@ -94,3 +94,25 @@ describe('describeSaveError', () => {
     expect(describeSaveError(undefined)).toEqual({ key: 'reason.saveFailedPlain' });
   });
 });
+
+describe('folder settings', () => {
+  it('off by default, English names until the user turns them on', () => {
+    const s = readSettings({});
+    expect(s.organize).toBe(false);
+    expect(s.folders.video).toBe('Video');
+    expect(s.rules).toEqual([]);
+  });
+
+  it('stored folders and rules are made safe; bad ones dropped', () => {
+    const s = readSettings({
+      organize: true,
+      folders: { video: 'Film', documents: '../evil', audio: '' },
+      rules: [{ kind: 'site', match: 'Example.com', folder: 'Ex' }, { kind: 'ext', match: 'pdf', folder: 'C:/x' }, 'junk'],
+    });
+    expect(s.organize).toBe(true);
+    expect(s.folders.video).toBe('Film');
+    expect(s.folders.documents).toBe('Documents');
+    expect(s.folders.audio).toBe('');
+    expect(s.rules).toEqual([{ kind: 'site', match: 'example.com', folder: 'Ex' }]);
+  });
+});

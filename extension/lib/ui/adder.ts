@@ -1,6 +1,7 @@
 /** The "paste links" form, shared by the popup and the app. */
 
 import { t } from '../i18n';
+import { expandPatterns, MAX_EXPANDED } from '../batch';
 import { parseUrls } from '../links';
 import type { PopupCommand } from '../protocol';
 
@@ -20,8 +21,15 @@ export function wireAdder(
   });
   form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const found = parseUrls(field.value);
-    status.textContent = found.length ? t('popup.addDone', { count: found.length }) : t('popup.addInvalid');
+    // Ranges like photo[001-120].jpg are spelled out first: as a URL the
+    // brackets would be encoded and lost.
+    const expanded = expandPatterns(field.value);
+    const found = parseUrls(expanded.text);
+    status.textContent = !found.length
+      ? t('popup.addInvalid')
+      : expanded.truncated
+        ? t('popup.addTruncated', { count: found.length, max: MAX_EXPANDED })
+        : t('popup.addDone', { count: found.length });
     if (!found.length) return;
     send({ type: 'urls', urls: found });
     field.value = '';
