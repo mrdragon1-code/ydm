@@ -11,17 +11,26 @@ import type { Checkpoint, WorkerCommand, WorkerEvent } from './protocol';
 import { Adaptive } from './adaptive';
 import { MIN_SPLIT, Segments } from './segments';
 
-/** A read that delivers nothing for this long counts as a dead connection. */
-const STALL_MS = 20_000;
+/** A response whose body stops for this long counts as a dead connection. */
+const STALL_MS = 10_000;
+/** Some servers take a while before the first byte: more patience there. */
+const FIRST_BYTE_MS = 20_000;
+/** A connection is warming up (not judged for speed) until this long after
+ * its first byte, and at most this long while waiting for it. */
+const WARM_MS = 300;
+const WARM_MAX_MS = 3000;
 const MAX_RETRIES = 5;
 /** Consecutive failures after which a connection hands its range to the
- * others: the server is most likely refusing extra connections. */
+ * others. When the server refused it (429, 503, a reset before any data),
+ * the ceiling also drops: it does not want that many connections. */
 const RETIRE_AFTER = 2;
 /** Below this size one connection is as fast as several. */
 const SEGMENT_THRESHOLD = 4 * MIN_SPLIT;
 const PROGRESS_MS = 500;
 /** At most this much transfer is redone after the browser is closed. */
 const CHECKPOINT_MS = 3000;
+/** How often a long download reports what works best on its host. */
+const TUNED_MS = 30_000;
 /** Network chunks are gathered into writes of this size. */
 const WRITE_BUFFER = 1 << 20;
 
@@ -49,6 +58,8 @@ class Fail extends Error {
     /** The browser's own downloader might succeed (it can send a Referer, …). */
     readonly retryInBrowser = true,
     readonly params?: Params,
+    /** The server turned this connection away (429, 503). */
+    readonly refusal = false,
   ) {
     super(key);
   }
@@ -65,6 +76,11 @@ let received = 0;
 let current: Segments | null = null;
 /** How many connections the segmented download uses. */
 let adaptive: Adaptive | null = null;
+/** The server turned a connection away during this download. */
+let wasRefused = false;
+/** When any connection last received data: a reset while others are
+ * receiving is the server refusing, not the network going down. */
+let lastDataAt = 0;
 /** A connection budget that arrived before the download began. */
 let pendingMax: number | null = null;
 /** The first response, kept open: its body is the start of the file. */
@@ -120,7 +136,7 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
 
     const size =
       probe.ranges && probe.total !== null
-        ? await segmented(handle, probe, probe.total, cmd.connections, missing)
+        ? await segmented(handle, probe, probe.total, cmd.connections, missing, cmd.hint)
         : await single(handle, probe);
     handle.flush();
     result = { type: 'done', name, size };
@@ -191,6 +207,16 @@ interface Conn {
   stop: AbortController;
   /** Last time this connection was asked to start over. */
   restartedAt: number;
+  /** When it was opened, and when its first byte came. */
+  requestAt: number;
+  firstByteAt: number | null;
+}
+
+/** A new connection still setting up: its speed would say nothing about
+ * the server yet. Only its first request counts; later ones (next range,
+ * restart) would otherwise keep the speed from ever being judged. */
+function warming(conn: Conn, now: number): boolean {
+  return conn.firstByteAt === null ? now - conn.requestAt < WARM_MAX_MS : now - conn.firstByteAt < WARM_MS;
 }
 
 /** A connection's request was dropped on purpose (too slow): not a failure. */
@@ -202,9 +228,10 @@ async function segmented(
   total: number,
   connections: number,
   missing: [number, number][] | null,
+  hint?: number,
 ): Promise<number> {
   const most = total < SEGMENT_THRESHOLD ? 1 : Math.max(1, Math.min(connections, Math.floor(total / MIN_SPLIT)));
-  adaptive = new Adaptive(pendingMax === null ? most : Math.min(most, pendingMax));
+  adaptive = new Adaptive(pendingMax === null ? most : Math.min(most, pendingMax), hint);
   const n = adaptive.initial();
   let segs: Segments;
   if (missing) {
@@ -232,9 +259,15 @@ async function segmented(
   const saver = setInterval(checkpoint, CHECKPOINT_MS);
   const conns = new Set<Conn>();
   const pool: Promise<void>[] = [];
+  let peak = 0;
+  const tuned = () => {
+    const best = adaptive!.best;
+    if (best.speed > 0) scope.postMessage({ type: 'tuned', ...best, most: peak, refused: wasRefused });
+  };
+  const reporter = setInterval(tuned, TUNED_MS);
   const launch = (first: number | null) => {
     if (first === null) return;
-    const conn: Conn = { id: first, stop: new AbortController(), restartedAt: 0 };
+    const conn: Conn = { id: first, stop: new AbortController(), restartedAt: 0, requestAt: performance.now(), firstByteAt: null };
     conns.add(conn);
     pool.push(
       connection(handle, segs, probe, conn)
@@ -248,10 +281,13 @@ async function segmented(
   };
   // More connections while they pay off; a straggler starts over.
   const steer = setInterval(() => {
-    if (adaptive!.tick(segs.running, received) === 'add') launch(segs.addWork());
+    const now = performance.now();
+    let warm = 0;
+    for (const conn of conns) if (warming(conn, now)) warm++;
+    peak = Math.max(peak, segs.running);
+    if (adaptive!.tick(segs.running, received, warm) === 'add') launch(segs.addWork());
     const slow = segs.straggler();
     if (slow === null) return;
-    const now = performance.now();
     for (const conn of conns) {
       if (conn.id !== slow || now - conn.restartedAt < 10_000) continue;
       conn.restartedAt = now;
@@ -267,6 +303,9 @@ async function segmented(
   } finally {
     clearInterval(steer);
     clearInterval(saver);
+    clearInterval(reporter);
+    // Only a download that ran its course says what works for the host.
+    if (!abort.signal.aborted) tuned();
     // Paused: record exactly what is on disk, so a resume redoes nothing.
     if (abort.signal.reason === CANCELLED) checkpoint();
   }
@@ -294,7 +333,7 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
     const before = seg.pos;
     let fail: Fail | null = null;
     try {
-      await fetchRange(handle, segs, probe, id, conn.stop.signal);
+      await fetchRange(handle, segs, probe, id, conn);
     } catch (e) {
       if (abort.signal.aborted) throw abort.signal.reason;
       if (conn.stop.signal.aborted) {
@@ -315,9 +354,14 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
     if (attempt + 1 >= RETIRE_AFTER) {
       const running = segs.running;
       if (segs.retire(id)) {
-        // The server is refusing extra connections: never go above this.
-        adaptive!.refused(running);
-        scope.postMessage({ type: 'capped', connections: adaptive!.max });
+        // Refused by the server: never go above this many. A slow or
+        // broken path is no such sign; the others simply take over.
+        const othersReceiving = performance.now() - lastDataAt < 2000;
+        if (fail.refusal || (fail.key === 'network' && !progressed && othersReceiving)) {
+          adaptive!.refused(running);
+          wasRefused = true;
+          scope.postMessage({ type: 'capped', connections: adaptive!.max });
+        }
         return false;
       }
     }
@@ -326,7 +370,8 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
   }
 }
 
-async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe, id: number, stop: AbortSignal) {
+async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe, id: number, conn: Conn) {
+  const stop = conn.stop.signal;
   const seg = segs.get(id);
   let res: Response;
   if (opening && seg.pos === 0) {
@@ -360,7 +405,7 @@ async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe
     void res.body?.cancel();
     throw new Fail('compressed', false);
   }
-  await pump(res, handle, segs, id, stop);
+  await pump(res, handle, segs, id, stop, () => (conn.firstByteAt ??= performance.now()));
 }
 
 /** For servers without ranges: one stream, restarted on failure. */
@@ -430,7 +475,14 @@ function flushAll(handle: SyncAccessHandle) {
 
 /** Copies a body into the segment until the body or the segment ends
  * (another connection may have taken over the tail). */
-async function pump(res: Response, handle: SyncAccessHandle, segs: Segments, id: number, stop?: AbortSignal) {
+async function pump(
+  res: Response,
+  handle: SyncAccessHandle,
+  segs: Segments,
+  id: number,
+  stop?: AbortSignal,
+  onData?: () => void,
+) {
   if (!res.body) return;
   const reader = res.body.getReader();
   const buffer = new WriteBuffer();
@@ -439,10 +491,12 @@ async function pump(res: Response, handle: SyncAccessHandle, segs: Segments, id:
   const onStop = () => void reader.cancel().catch(() => {});
   stop?.addEventListener('abort', onStop, { once: true });
   try {
-    for (;;) {
-      const { done, value } = await withTimeout(reader.read(), STALL_MS);
+    for (let first = true; ; first = false) {
+      const { done, value } = await withTimeout(reader.read(), first ? FIRST_BYTE_MS : STALL_MS);
       if (stop?.aborted) throw stop.reason;
       if (done) return;
+      lastDataAt = performance.now();
+      onData?.();
       const { offset, take } = segs.claim(id, value.byteLength);
       buffer.add(handle, take < value.byteLength ? value.subarray(0, take) : value, offset);
       received += take;
@@ -494,7 +548,7 @@ async function ensureSpace(bytes: number) {
 }
 
 function statusFail(status: number): Fail {
-  return new Fail(statusReason(status), isRetryableStatus(status), true, { status });
+  return new Fail(statusReason(status), isRetryableStatus(status), true, { status }, status === 429 || status === 503);
 }
 
 function asFail(e: unknown): Fail {

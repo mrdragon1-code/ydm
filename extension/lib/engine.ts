@@ -80,7 +80,7 @@ export class Engine {
     }
   }
 
-  private async start({ id, url, name, connections, resume, limit, checksum, inspect, hashFirst, kind }: Extract<EngineCommand, { type: 'add' }>) {
+  private async start({ id, url, name, connections, hint, resume, limit, checksum, inspect, hashFirst, kind }: Extract<EngineCommand, { type: 'add' }>) {
     const worker = kind ? new StreamWorker() : new DownloadWorker();
     const job: Job = { worker, limit, max: connections, checksum, inspect, hashFirst };
     this.jobs.set(id, job);
@@ -92,13 +92,14 @@ export class Engine {
       this.emit({ type: 'failed', id, reason: { key: 'reason.engine', params: { detail: e.message || 'worker' } }, retryInBrowser: true });
       void this.release(id);
     };
-    worker.postMessage({ type: 'start', url, name, connections: job.max ?? connections, file: fileName(id), resume, limit: job.limit, kind });
+    worker.postMessage({ type: 'start', url, name, connections: job.max ?? connections, hint, file: fileName(id), resume, limit: job.limit, kind });
   }
 
   private async onWorker(id: number, msg: WorkerEvent) {
     switch (msg.type) {
       case 'started':
       case 'capped':
+      case 'tuned':
       case 'progress':
       case 'checkpoint':
       case 'origins':

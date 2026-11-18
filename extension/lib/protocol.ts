@@ -75,6 +75,8 @@ export type EngineCommand =
       url: string;
       name?: string;
       connections: number;
+      /** Connections that worked best on this host before: start there. */
+      hint?: number;
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
       limit: number;
@@ -108,6 +110,8 @@ export type EngineEvent =
   | { type: 'started'; id: number; name: string; total: number | null; url: string }
   /** The server refused more connections than this. */
   | { type: 'capped'; id: number; connections: number }
+  /** What worked best on this host, remembered for its next download. */
+  | { type: 'tuned'; id: number; connections: number; speed: number; most: number; refused: boolean }
   | { type: 'progress'; id: number; done: number; total: number | null; parts?: Part[] }
   | { type: 'checkpoint'; id: number; checkpoint: Checkpoint }
   | { type: 'ready'; id: number; name: string; blobUrl: string }
@@ -125,6 +129,7 @@ export type WorkerCommand =
       url: string;
       name?: string;
       connections: number;
+      hint?: number;
       file: string;
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
@@ -142,6 +147,7 @@ export type WorkerCommand =
 export type WorkerEvent =
   | { type: 'started'; name: string; total: number | null; url: string }
   | { type: 'capped'; connections: number }
+  | { type: 'tuned'; connections: number; speed: number; most: number; refused: boolean }
   | { type: 'progress'; done: number; total: number | null; parts?: Part[] }
   /** Everything outside `missing` has been flushed to disk. */
   | { type: 'checkpoint'; checkpoint: Checkpoint }

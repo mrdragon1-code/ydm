@@ -399,6 +399,39 @@ test('downloads from one host share six connections and get faster as they adapt
   expect(ranged.filter((l) => l.includes('?b')).length).toBeGreaterThan(1);
 });
 
+test('by default YDM ramps up to six connections, and the next download from the site starts there', async ({
+  context,
+  worker,
+  served,
+}) => {
+  // 512 KB/s per connection: every extra connection adds speed.
+  const server = await serve('--size', '24', '--rate', '512', '--filename', 'ramp.bin', '--log');
+  served.push(server);
+  const lines: { at: number; line: string }[] = [];
+  server.process.stdout!.on('data', (c: Buffer) => {
+    for (const line of c.toString().split('\n')) if (line) lines.push({ at: Date.now(), line });
+  });
+  const ranged = (tag: string) => lines.filter((l) => l.line.startsWith(`GET /file?${tag} range=bytes=`));
+  const done = async (n: number) => {
+    for (const deadline = Date.now() + 90_000; (await downloads(worker)).filter((d) => d.state === 'complete' && fromYdm(d)).length < n; ) {
+      if (Date.now() > deadline) throw new Error('download did not complete');
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  };
+  await start(context, `${server.url}?a`);
+  await done(1);
+  expect(ranged('a').length).toBeGreaterThanOrEqual(6);
+  const { hostCaps } = await worker.evaluate(() => (globalThis as ExtensionGlobal).chrome.storage.local.get('hostCaps'));
+  const best = Object.values(hostCaps as Record<string, { best?: number }>)[0]?.best ?? 0;
+  expect(best).toBeGreaterThanOrEqual(5);
+
+  // The second download opens that many at once: no ramp-up again.
+  await start(context, `${server.url}?b`);
+  await done(2);
+  const b = ranged('b');
+  expect(b.filter((l) => l.at - b[0]!.at < 1500).length).toBeGreaterThanOrEqual(best);
+});
+
 test('a server that refuses extra connections still delivers, and YDM remembers', async ({
   context,
   worker,

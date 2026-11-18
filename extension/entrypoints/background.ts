@@ -1,5 +1,5 @@
 import type { Browser } from 'wxt/browser';
-import { budgets, freshCaps, type HostCap, hostOf } from '@/lib/budget';
+import { budgets, freshCaps, type HostCap, hostOf, mergeCap } from '@/lib/budget';
 import { pickLocale, setLocale, t, useMachineTranslations } from '@/lib/i18n';
 import { createLink } from '@/lib/link';
 import { cachedTranslation } from '@/lib/translate';
@@ -14,6 +14,7 @@ import {
   DEFAULT_SETTINGS,
   describeSaveError,
   isProgram,
+  migrateSettings,
   publicSettings,
   readSettings,
   SETTING_KEYS,
@@ -105,7 +106,12 @@ export default defineBackground(() => {
 
   // The list survives a service worker restart and the browser being closed.
   const restored = (async () => {
-    const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId', 'hostCaps']);
+    const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId', 'hostCaps', 'settingsRev']);
+    const migrated = migrateSettings(stored);
+    if (migrated) {
+      Object.assign(stored, migrated);
+      await browser.storage.local.set(migrated);
+    }
     hostCaps = freshCaps((stored.hostCaps as Record<string, HostCap>) ?? {});
     settings = readSettings(stored);
     await applyLanguage();
@@ -430,6 +436,8 @@ export default defineBackground(() => {
           url: item.url,
           name: item.hint,
           connections: item.connectionsSent!,
+          // What worked best on this host before: no slow ramp-up again.
+          hint: hostCaps[item.host ?? hostOf(item.url)]?.best,
           resume: item.checkpoint,
           limit: item.limitSent,
           checksum: settings.checksum,
@@ -549,13 +557,16 @@ export default defineBackground(() => {
       case 'inspected':
         void checkFile(item, event.name, event.sha256, new Uint8Array(event.head));
         return;
-      case 'capped': {
-        // The server refused more connections: remembered for this host.
+      case 'capped':
+      case 'tuned': {
+        // What the server tolerates and what worked best: remembered for
+        // this host's next downloads.
         const host = item.host ?? hostOf(item.url);
-        const known = hostCaps[host]?.connections ?? Infinity;
-        hostCaps[host] = { connections: Math.min(known, event.connections), at: Date.now() };
+        if (!host) return;
+        const before = hostCaps[host]?.connections;
+        hostCaps[host] = mergeCap(hostCaps[host], event);
         void browser.storage.local.set({ hostCaps });
-        applyConnections();
+        if (hostCaps[host]?.connections !== before) applyConnections();
         return;
       }
       case 'progress': {

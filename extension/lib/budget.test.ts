@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgets, CAP_MAX_AGE, freshCaps, hostOf } from './budget';
+import { BEST_MAX_AGE, budgets, CAP_MAX_AGE, freshCaps, hostOf, mergeCap, RAISE_EVERY } from './budget';
 
 describe('budgets', () => {
   it('one download gets what the user allows', () => {
@@ -74,6 +74,43 @@ describe('host caps', () => {
     const now = 10 * CAP_MAX_AGE;
     const caps = { old: { connections: 2, at: now - CAP_MAX_AGE - 1 }, recent: { connections: 3, at: now - 1000 } };
     expect(Object.keys(freshCaps(caps, now))).toEqual(['recent']);
+  });
+
+  it('the best connection count is kept a month, the tolerated one a week', () => {
+    const now = 10 * BEST_MAX_AGE;
+    const twoWeeks = now - 2 * CAP_MAX_AGE;
+    const caps = { a: { connections: 2, at: twoWeeks, best: 5, speed: 9e6, bestAt: twoWeeks }, b: { best: 4, bestAt: now - BEST_MAX_AGE - 1, at: 0 } };
+    expect(freshCaps(caps, now)).toEqual({ a: { at: twoWeeks, best: 5, speed: 9e6, bestAt: twoWeeks } });
+  });
+
+  it('a refusal lowers what is tolerated, never raises it', () => {
+    let c = mergeCap(undefined, { type: 'capped', connections: 3 }, 1);
+    expect(c.connections).toBe(3);
+    c = mergeCap(c, { type: 'capped', connections: 5 }, 2);
+    expect(c.connections).toBe(3);
+  });
+
+  it('a fast download is remembered; one with no refusal at the limit lets it rise', () => {
+    const t = RAISE_EVERY;
+    let c = mergeCap(undefined, { type: 'capped', connections: 3 }, 1);
+    // Too soon after the refusal: no rise yet.
+    expect(mergeCap(c, { type: 'tuned', connections: 3, speed: 6e6, most: 3, refused: false }, 2).connections).toBe(3);
+    c = mergeCap(c, { type: 'tuned', connections: 3, speed: 6e6, most: 3, refused: false }, 1 + t);
+    expect(c).toMatchObject({ connections: 4, best: 3, speed: 6e6, bestAt: 1 + t });
+    // Refused again, below the limit, or within the hour: no rise.
+    expect(mergeCap(c, { type: 'tuned', connections: 4, speed: 7e6, most: 4, refused: true }, 3 * t).connections).toBe(4);
+    expect(mergeCap(c, { type: 'tuned', connections: 2, speed: 7e6, most: 2, refused: false }, 3 * t).connections).toBe(4);
+    expect(mergeCap(c, { type: 'tuned', connections: 4, speed: 7e6, most: 4, refused: false }, 1.5 * t).connections).toBe(4);
+    // Back at the browser's own limit: nothing left to remember.
+    c = mergeCap({ connections: 5, at: 0 }, { type: 'tuned', connections: 5, speed: 1, most: 5, refused: false }, t);
+    expect(c.connections).toBeUndefined();
+  });
+
+  it('a much slower download does not replace a better record', () => {
+    const c = mergeCap(undefined, { type: 'tuned', connections: 6, speed: 10e6, most: 6, refused: false }, 1);
+    expect(mergeCap(c, { type: 'tuned', connections: 3, speed: 4e6, most: 3, refused: false }, 2).best).toBe(6);
+    expect(mergeCap(c, { type: 'tuned', connections: 5, speed: 9e6, most: 5, refused: false }, 2).best).toBe(5);
+    expect(mergeCap(c, { type: 'tuned', connections: 3, speed: 4e6, most: 3, refused: false }, 1 + CAP_MAX_AGE).best).toBe(3);
   });
 
   it('host includes the port', () => {

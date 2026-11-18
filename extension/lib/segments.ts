@@ -17,6 +17,11 @@ export const MIN_SPLIT = 1 << 20;
 
 /** Speeds are averaged over about this long. */
 const SPEED_WINDOW_MS = 2000;
+/** A segment unmeasured for less than this is too young to split. */
+const YOUNG_MS = 2000;
+/** The last part of a download, as a share of its bytes, where slow
+ * connections are restarted more eagerly. */
+const NEAR_END = 0.15;
 
 export interface Segment {
   start: number;
@@ -119,13 +124,18 @@ export class Segments {
     s.sampledPos = s.pos;
   }
 
-  /** Seconds until a segment is done at its current speed; unmeasured
-   * ones count as slow, so a new connection's range is not split blindly. */
-  private eta(s: Segment): number {
+  /** Seconds until a segment is done at its current speed. One not yet
+   * measured is assumed to go at `typical` (the others' median). */
+  private eta(s: Segment, typical: number): number {
     const left = s.end - s.pos;
     if (left <= 0) return 0;
-    if (!s.speed) return left / 1;
-    return left / s.speed;
+    return left / (s.speed || typical || 1);
+  }
+
+  /** A segment whose connection has just started: no speed yet, and too
+   * young to judge. Splitting it would cut a range blindly. */
+  private young(s: Segment): boolean {
+    return !s.speed && this.now() - s.sampledAt < YOUNG_MS;
   }
 
   /**
@@ -153,17 +163,25 @@ export class Segments {
       this.get(orphan).orphan = false;
       return orphan;
     }
-    let victim = -1;
-    let worst = 0;
-    for (let i = 0; i < this.list.length; i++) {
-      const s = this.list[i]!;
-      if (s.orphan || this.remaining(i) < 2 * MIN_SPLIT) continue;
-      const eta = this.eta(s);
-      if (victim < 0 || eta > worst) {
-        victim = i;
-        worst = eta;
+    const typical = median(this.list.filter((s) => s.speed > 0 && s.pos < s.end).map((s) => s.speed));
+    const pick = (skipYoung: boolean) => {
+      let victim = -1;
+      let worst = 0;
+      for (let i = 0; i < this.list.length; i++) {
+        const s = this.list[i]!;
+        if (s.orphan || this.remaining(i) < 2 * MIN_SPLIT || (skipYoung && this.young(s))) continue;
+        const eta = this.eta(s, typical);
+        if (victim < 0 || eta > worst) {
+          victim = i;
+          worst = eta;
+        }
       }
-    }
+      return victim;
+    };
+    // Measured or settled segments first; a just-started one only when
+    // nothing else is left to split.
+    let victim = pick(true);
+    if (victim < 0) victim = pick(false);
     if (victim < 0) return null;
     const v = this.get(victim);
     // Split where both halves finish together: a new connection starts at
@@ -180,22 +198,30 @@ export class Segments {
   }
 
   /**
-   * A connection crawling far behind the others, near the end of the
-   * download, where it would hold everything up: the caller drops its
-   * request and gives the range to a fresh connection. Only one at a time,
-   * and only when there are others to compare with.
+   * A connection crawling far behind the others, where it would hold the
+   * download up: the caller drops its request and gives the range to a
+   * fresh connection. Below a quarter of the median speed at any time, below
+   * half of it near the end (where a slow range decides when everything
+   * finishes). Only one at a time, and only with others to compare with.
    */
   straggler(): number | null {
     const live = this.list.filter((s) => s.pos < s.end && !s.orphan && s.speed > 0);
     if (live.length < 2) return null;
     const med = median(live.map((s) => s.speed));
+    let size = 0;
+    let left = 0;
+    for (const s of this.list) {
+      size += s.end - s.start;
+      left += s.end - s.pos;
+    }
+    const bar = left <= size * NEAR_END ? med / 2 : med / 4;
     const now = this.now();
     let worst: Segment | null = null;
     for (const s of live) {
-      // Measured for a while, far below the others, and with enough left
+      // Measured recently, far below the others, and with enough left
       // that a new request is worth it.
       if (now - s.sampledAt > 1000) continue;
-      if (s.speed >= med / 4 || s.end - s.pos < 2 * MIN_SPLIT) continue;
+      if (s.speed >= bar || s.end - s.pos < 2 * MIN_SPLIT) continue;
       if (!worst || s.speed < worst.speed) worst = s;
     }
     return worst ? this.list.indexOf(worst) : null;
