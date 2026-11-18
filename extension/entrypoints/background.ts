@@ -104,16 +104,21 @@ export default defineBackground(() => {
   const link = createLink(onEngineEvent);
   const scanner = new Scanner();
 
+  /** Settings changed while the stored ones were being read: they win
+   * over what that read returned. Null once restored. */
+  let early: Record<string, unknown> | null = {};
+
   // The list survives a service worker restart and the browser being closed.
   const restored = (async () => {
     const stored = await browser.storage.local.get([...SETTING_KEYS, 'items', 'nextId', 'hostCaps', 'settingsRev']);
     const migrated = migrateSettings(stored);
     if (migrated) {
       Object.assign(stored, migrated);
-      await browser.storage.local.set(migrated);
+      void browser.storage.local.set(migrated);
     }
     hostCaps = freshCaps((stored.hostCaps as Record<string, HostCap>) ?? {});
-    settings = readSettings(stored);
+    settings = readSettings({ ...stored, ...early });
+    early = null;
     await applyLanguage();
     nextId = (stored.nextId as number) ?? 0;
     const engineAlive = await link.alive();
@@ -153,7 +158,11 @@ export default defineBackground(() => {
     if (changes.translated) void applyLanguage();
     if (!SETTING_KEYS.some((key) => changes[key])) return;
     const next: Record<string, unknown> = { ...settings };
-    for (const key of SETTING_KEYS) if (changes[key]) next[key] = changes[key].newValue;
+    for (const key of SETTING_KEYS) {
+      if (!changes[key]) continue;
+      next[key] = changes[key].newValue;
+      if (early) early[key] = changes[key].newValue;
+    }
     const languageChanged = next.language !== settings.language;
     const keysChanged = next.virusTotalKey !== settings.virusTotalKey || next.abuseChKey !== settings.abuseChKey;
     settings = readSettings(next);
