@@ -31,7 +31,7 @@ export function settingsScreens(openAlert: (id: number) => void) {
 
   // --- switches and choices -----------------------------------------------
 
-  const switches = ['enabled', 'programsToBrowser', 'checksum', 'notify', 'scanLocal', 'askOnSuspicious'] as const;
+  const switches = ['enabled', 'programsToBrowser', 'checksum', 'mirrors', 'notify', 'scanLocal', 'askOnSuspicious'] as const;
   for (const key of switches) {
     const box = $<HTMLInputElement>(key);
     box.addEventListener('change', () => void save({ [key]: box.checked }));

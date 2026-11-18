@@ -1,6 +1,6 @@
 # YDM privacy policy
 
-_Last updated: 17 November 2026_
+_Last updated: 18 November 2026_
 
 **YDM collects no data and sends nothing to its authors.** There is no account, no
 analytics, no telemetry, no advertising and no server run by YDM. Nothing about your
@@ -14,7 +14,8 @@ downloads leaves your device unless you enter your own key for an online malware
 - **Partly downloaded files**, in the extension's private storage (OPFS), deleted as soon
   as the browser has saved the finished file to your Downloads folder.
 - **How many connections a site accepted**, for a week, so YDM does not keep opening more
-  than that site allows.
+  than that site allows, and **how many worked best and how fast**, for a month, so the next
+  download from it starts at full speed.
 - **Security checks on the device**: the download's address, the file's name and its first
   64 bytes are examined locally to spot disguised programs. Nothing is sent.
 - **The answers of online malware checks**, for a week, if you turned them on, so the same
@@ -36,7 +37,11 @@ All of this is removed when you uninstall YDM.
 ## Network requests
 
 YDM connects only to the address of the file you are downloading (and wherever that site
-redirects it), exactly as the browser would. The browser attaches that site's own cookies
+redirects it), exactly as the browser would. If that site names mirrors of the file and
+gives its SHA-256, YDM also downloads parts of it from those mirrors (turn this off in
+Settings → "Use the mirrors the server names"); mirrors receive no cookies and no page
+address. When a download was redirected to another server, YDM may ask the original site
+for the file's Metalink description (`<address>.meta4`), which lists such mirrors. The browser attaches that site's own cookies
 and, like the browser, YDM sends the address of the page the download came from as the
 Referer (only the site's origin when the file is on another site).
 

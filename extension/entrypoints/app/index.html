@@ -178,6 +178,10 @@
                     <dt data-i18n="downloads.connections"></dt>
                     <dd id="dConns" class="num"></dd>
                   </div>
+                  <div>
+                    <dt data-i18n="downloads.servers"></dt>
+                    <dd id="dServers"></dd>
+                  </div>
                 </dl>
                 <section class="d-hash" aria-labelledby="dHashLabel">
                   <div class="d-hash-head">
@@ -389,6 +393,11 @@
                 <label for="speedLimit" data-i18n="settings.speedLimit"></label>
                 <select id="speedLimit" aria-describedby="speedLimitHelp"></select>
                 <p id="speedLimitHelp" class="help" data-i18n="settings.speedLimitHelp"></p>
+              </div>
+              <div class="row">
+                <label for="mirrors" data-i18n="settings.mirrors"></label>
+                <input type="checkbox" id="mirrors" class="switch" role="switch" aria-describedby="mirrorsHelp" />
+                <p id="mirrorsHelp" class="help" data-i18n="settings.mirrorsHelp"></p>
               </div>
             </div>
           </section>

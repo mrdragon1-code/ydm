@@ -8,8 +8,11 @@ import { isRetryableStatus, parseContentRange, statusReason, validator } from '.
 import { fromContentDisposition, fromUrl, sanitize } from './naming';
 import type { Params, Text } from './i18n';
 import type { Checkpoint, WorkerCommand, WorkerEvent } from './protocol';
-import { Adaptive } from './adaptive';
+import { Adaptive, START } from './adaptive';
+import { hostOf, PER_HOST } from './budget';
+import { allowed, best, type Metalink, type Mirror, parseDigest, parseLinks, parseMeta4 } from './mirrors';
 import { MIN_SPLIT, Segments } from './segments';
+import { Sha256 } from './sha256';
 
 /** A response whose body stops for this long counts as a dead connection. */
 const STALL_MS = 10_000;
@@ -31,11 +34,19 @@ const PROGRESS_MS = 500;
 const CHECKPOINT_MS = 3000;
 /** How often a long download reports what works best on its host. */
 const TUNED_MS = 30_000;
+/** Mirrors are worth it only for files at least this large. */
+const MIRROR_MIN = 16 * MIN_SPLIT;
+/** A Metalink file: at most this large, and this long to arrive. */
+const META4_MAX = 1 << 20;
+const META4_WAIT_MS = 5000;
+/** The finished file is read in slices of this size to check its hash. */
+const VERIFY_SLICE = 4 << 20;
 /** Network chunks are gathered into writes of this size. */
 const WRITE_BUFFER = 1 << 20;
 
 // Worker globals, typed locally: the project compiles against the DOM lib.
 interface SyncAccessHandle {
+  read(buffer: Uint8Array, options: { at: number }): number;
   write(data: Uint8Array, options: { at: number }): number;
   truncate(size: number): void;
   getSize(): number;
@@ -107,6 +118,10 @@ interface Probe {
   ranges: boolean;
   validator: string | null;
   name: string | null;
+  /** Mirrors and hash the server may announce (RFC 6249). */
+  link: string | null;
+  digest: string | null;
+  reprDigest: string | null;
 }
 
 async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
@@ -134,10 +149,33 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
       PROGRESS_MS,
     );
 
-    const size =
-      probe.ranges && probe.total !== null
-        ? await segmented(handle, probe, probe.total, cmd.connections, missing, cmd.hint)
-        : await single(handle, probe);
+    let size: number;
+    if (probe.ranges && probe.total !== null) {
+      const total = probe.total;
+      // Bytes an earlier run took from mirrors still need the hash.
+      const prior = missing ? cmd.resume?.mirrors : undefined;
+      mirrored = prior ? prior.ranges.map(([a, b]): [number, number] => [a, b]) : [];
+      let discovered = cmd.mirrors ? await discover(cmd.url, probe) : null;
+      // Bytes taken earlier are proven by the hash of that time; a server
+      // giving another one now is not trusted with more mirrors.
+      if (prior && discovered && discovered.check.sha256 !== prior.sha256) discovered = null;
+      const found: Found | null =
+        discovered ?? (prior ? { mirrors: [], check: { sha256: prior.sha256, pieces: null } } : null);
+      size = await segmented(handle, probe, total, cmd.connections, missing, cmd.hint, found);
+      if (found && mirrored.length) {
+        const servers = 1 + sources.filter((s) => !s.origin && s.used).length;
+        let bad = await verify(handle, total, found.check);
+        if (bad?.length) {
+          // Those bytes again, from the download's own server only.
+          received = total - bad.reduce((n, [a, b]) => n + b - a, 0);
+          await segmented(handle, probe, total, cmd.connections, bad, cmd.hint, { mirrors: [], check: found.check }, false);
+          bad = await verify(handle, total, found.check);
+        }
+        scope.postMessage({ type: 'mirrors', servers: Math.max(2, servers), verified: bad === null });
+      }
+    } else {
+      size = await single(handle, probe);
+    }
     handle.flush();
     result = { type: 'done', name, size };
   } catch (e) {
@@ -187,6 +225,9 @@ async function openUrl(url: string): Promise<Probe> {
     ranges,
     validator: validator(res.headers),
     name: fromContentDisposition(res.headers.get('content-disposition')),
+    link: res.headers.get('link'),
+    digest: res.headers.get('digest'),
+    reprDigest: res.headers.get('repr-digest'),
   };
 }
 
@@ -200,9 +241,26 @@ function resumable(saved: Checkpoint | undefined, probe: Probe, handle: SyncAcce
   return saved.missing;
 }
 
+/** Where a connection fetches from: the download's own server, or a mirror
+ * it named. Each has its own connection count: they are different hosts. */
+interface Source {
+  url: string;
+  origin: boolean;
+  adaptive: Adaptive;
+  /** Bytes received from it, for its own speed. */
+  received: number;
+  /** It sent part of the file. */
+  used: boolean;
+  /** A mirror that proved itself got its first few connections. */
+  opened: boolean;
+  /** Dropped: it failed or answered with something else than the file. */
+  dead: boolean;
+}
+
 /** What a connection is doing, so the steering timer can stop a straggler. */
 interface Conn {
   id: number | null;
+  source: Source;
   /** Aborts only this connection's current request. */
   stop: AbortController;
   /** Last time this connection was asked to start over. */
@@ -210,6 +268,8 @@ interface Conn {
   /** When it was opened, and when its first byte came. */
   requestAt: number;
   firstByteAt: number | null;
+  /** Bytes written from a mirror in a row, `[from, to)`, not yet recorded. */
+  run: [number, number] | null;
 }
 
 /** A new connection still setting up: its speed would say nothing about
@@ -222,6 +282,33 @@ function warming(conn: Conn, now: number): boolean {
 /** A connection's request was dropped on purpose (too slow): not a failure. */
 const RESTART = new Error('restart');
 
+let sources: Source[] = [];
+let conns = new Set<Conn>();
+/** Ranges written from mirrors, `[from, to)`: what the hash must prove. */
+let mirrored: [number, number][] = [];
+
+function record(conn: Conn) {
+  if (conn.run) mirrored.push(conn.run);
+  conn.run = null;
+}
+
+/** Ranges sorted and joined where they touch. */
+function merged(ranges: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  for (const [from, to] of [...ranges].sort((a, b) => a[0] - b[0])) {
+    const last = out.at(-1);
+    if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+    else out.push([from, to]);
+  }
+  return out;
+}
+
+function runningOf(source: Source): number {
+  let n = 0;
+  for (const c of conns) if (c.source === source) n++;
+  return n;
+}
+
 async function segmented(
   handle: SyncAccessHandle,
   probe: Probe,
@@ -229,10 +316,21 @@ async function segmented(
   connections: number,
   missing: [number, number][] | null,
   hint?: number,
+  found: Found | null = null,
+  /** A short refetch says nothing about the site: no `tuned`. */
+  report = true,
 ): Promise<number> {
   const most = total < SEGMENT_THRESHOLD ? 1 : Math.max(1, Math.min(connections, Math.floor(total / MIN_SPLIT)));
   adaptive = new Adaptive(pendingMax === null ? most : Math.min(most, pendingMax), hint);
   const n = adaptive.initial();
+  const origin: Source = { url: probe.url, origin: true, adaptive, received: 0, used: true, opened: true, dead: false };
+  // A mirror starts with one connection: it proves it has the file first.
+  const perMirror = Math.max(1, Math.min(PER_HOST, Math.floor(total / MIN_SPLIT)));
+  sources = [
+    origin,
+    ...(found?.mirrors ?? []).map((m) => ({ url: m.url, origin: false, adaptive: new Adaptive(perMirror, 1), received: 0, used: false, opened: false, dead: false })),
+  ];
+  conns = new Set();
   let segs: Segments;
   if (missing) {
     segs = Segments.resume(missing, n);
@@ -252,22 +350,23 @@ async function segmented(
     flushAll(handle);
     const missing = segs.missing();
     handle.flush();
-    scope.postMessage({ type: 'checkpoint', checkpoint: { total, validator, missing } });
+    const runs = [...conns].flatMap((c) => (c.run ? [c.run] : []));
+    const mirrors = found ? { sha256: found.check.sha256, ranges: merged([...mirrored, ...runs]) } : undefined;
+    scope.postMessage({ type: 'checkpoint', checkpoint: { total, validator, missing, ...(mirrors ? { mirrors } : {}) } });
   };
   // Right away too: an older checkpoint must not outlive a fresh start.
   checkpoint();
   const saver = setInterval(checkpoint, CHECKPOINT_MS);
-  const conns = new Set<Conn>();
   const pool: Promise<void>[] = [];
   let peak = 0;
   const tuned = () => {
     const best = adaptive!.best;
-    if (best.speed > 0) scope.postMessage({ type: 'tuned', ...best, most: peak, refused: wasRefused });
+    if (report && best.speed > 0) scope.postMessage({ type: 'tuned', ...best, most: peak, refused: wasRefused });
   };
   const reporter = setInterval(tuned, TUNED_MS);
-  const launch = (first: number | null) => {
+  const launch = (first: number | null, source: Source) => {
     if (first === null) return;
-    const conn: Conn = { id: first, stop: new AbortController(), restartedAt: 0, requestAt: performance.now(), firstByteAt: null };
+    const conn: Conn = { id: first, source, stop: new AbortController(), restartedAt: 0, requestAt: performance.now(), firstByteAt: null, run: null };
     conns.add(conn);
     pool.push(
       connection(handle, segs, probe, conn)
@@ -276,16 +375,39 @@ async function segmented(
           if (!abort.signal.aborted) abort.abort(asFail(e));
           throw e;
         })
-        .finally(() => conns.delete(conn)),
+        .finally(() => {
+          record(conn);
+          conns.delete(conn);
+        }),
     );
   };
-  // More connections while they pay off; a straggler starts over.
+  // More connections while they pay off, per server; a straggler starts over.
   const steer = setInterval(() => {
     const now = performance.now();
-    let warm = 0;
-    for (const conn of conns) if (warming(conn, now)) warm++;
-    peak = Math.max(peak, segs.running);
-    if (adaptive!.tick(segs.running, received, warm) === 'add') launch(segs.addWork());
+    for (const source of sources) {
+      if (source.dead) continue;
+      let running = 0;
+      let warm = 0;
+      for (const conn of conns) {
+        if (conn.source !== source) continue;
+        running++;
+        if (warming(conn, now)) warm++;
+      }
+      if (source === origin) peak = Math.max(peak, running);
+      // A mirror grows only once it has sent part of the file; then it
+      // gets as many as a new download would, and adapts from there.
+      if (!source.used) continue;
+      if (!source.opened) {
+        for (let k = running; k < Math.min(START, source.adaptive.max); k++) {
+          const work = segs.addWork();
+          if (work === null) break;
+          launch(work, source);
+          source.opened = true;
+        }
+        continue;
+      }
+      if (source.adaptive.tick(running, source.received, warm) === 'add') launch(segs.addWork(), source);
+    }
     const slow = segs.straggler();
     if (slow === null) return;
     for (const conn of conns) {
@@ -297,7 +419,8 @@ async function segmented(
   try {
     // A resumed download may have fewer ranges than connections: the spare
     // ones split the largest, as at the end of any download.
-    for (let i = 0; i < n; i++) launch(i < segs.list.length && !segs.get(i).orphan ? i : segs.nextWork());
+    for (let i = 0; i < n; i++) launch(i < segs.list.length && !segs.get(i).orphan ? i : segs.nextWork(), origin);
+    for (const mirror of sources) if (!mirror.origin) launch(segs.addWork(), mirror);
     // Connections launched later join the pool while we wait.
     for (let i = 0; i < pool.length; i++) await pool[i];
   } finally {
@@ -316,10 +439,16 @@ async function segmented(
 async function connection(handle: SyncAccessHandle, segs: Segments, probe: Probe, conn: Conn) {
   while (conn.id !== null) {
     if (!(await fetchSegment(handle, segs, probe, conn))) return; // retired
-    // Over the budget (another download from this host started): leave.
-    if (segs.running > adaptive!.max && segs.leave()) return;
+    // Over its server's budget (another download from it started): leave.
+    if (runningOf(conn.source) > conn.source.adaptive.max && segs.leave()) return;
     conn.id = segs.nextWork();
   }
+}
+
+/** A mirror that failed or sent something else is not asked again; its
+ * connections go on with the download's own server. */
+function drop(source: Source) {
+  source.dead = true;
 }
 
 /** Fetches one segment to its end, retrying. `false` means this connection
@@ -330,6 +459,7 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
   for (;;) {
     const seg = segs.get(id);
     if (seg.pos >= seg.end) return true;
+    if (conn.source.dead) conn.source = sources[0]!;
     const before = seg.pos;
     let fail: Fail | null = null;
     try {
@@ -342,6 +472,8 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
         continue;
       }
       fail = asFail(e);
+    } finally {
+      record(conn);
     }
     const progressed = seg.pos > before;
     if (progressed) attempt = 0;
@@ -350,9 +482,14 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
       // A 206 with an empty body would otherwise loop forever.
       fail = new Fail('stalled', true);
     }
+    if (!conn.source.origin) {
+      // Any trouble with a mirror: the download's own server takes over.
+      drop(conn.source);
+      continue;
+    }
     if (!fail.retryable || attempt >= MAX_RETRIES) throw fail;
     if (attempt + 1 >= RETIRE_AFTER) {
-      const running = segs.running;
+      const running = runningOf(conn.source);
       if (segs.retire(id)) {
         // Refused by the server: never go above this many. A slow or
         // broken path is no such sign; the others simply take over.
@@ -373,16 +510,18 @@ async function fetchSegment(handle: SyncAccessHandle, segs: Segments, probe: Pro
 async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe, id: number, conn: Conn) {
   const stop = conn.stop.signal;
   const seg = segs.get(id);
+  const mirror = !conn.source.origin;
   let res: Response;
-  if (opening && seg.pos === 0) {
+  if (opening && seg.pos === 0 && !mirror) {
     // The opening response already streams from byte 0; `pump` stops it
     // where this segment ends.
     res = opening;
     opening = null;
   } else {
     const headers: Record<string, string> = { Range: `bytes=${seg.pos}-${seg.end - 1}` };
-    if (probe.validator) headers['If-Range'] = probe.validator;
-    res = await request(probe.url, headers, stop);
+    // A mirror has its own ETag: its bytes are proven by the hash instead.
+    if (probe.validator && !mirror) headers['If-Range'] = probe.validator;
+    res = await request(conn.source.url, headers, stop, mirror);
   }
   if (res.status !== 206) {
     void res.body?.cancel();
@@ -395,7 +534,7 @@ async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe
     void res.body?.cancel();
     throw new Fail('wrongPart', true);
   }
-  if (range.total !== null && range.total !== probe.total) {
+  if (range.total !== probe.total && (range.total !== null || mirror)) {
     void res.body?.cancel();
     throw new Fail('changed', false);
   }
@@ -405,7 +544,141 @@ async function fetchRange(handle: SyncAccessHandle, segs: Segments, probe: Probe
     void res.body?.cancel();
     throw new Fail('compressed', false);
   }
-  await pump(res, handle, segs, id, stop, () => (conn.firstByteAt ??= performance.now()));
+  const source = conn.source;
+  await pump(res, handle, segs, id, stop, (offset, take) => {
+    conn.firstByteAt ??= performance.now();
+    source.received += take;
+    if (!mirror || !take) return;
+    source.used = true;
+    if (conn.run && conn.run[1] === offset) conn.run[1] = offset + take;
+    else {
+      record(conn);
+      conn.run = [offset, offset + take];
+    }
+  });
+}
+
+/** What the server says about mirrors, when they may be used. */
+interface Found {
+  mirrors: Mirror[];
+  check: { sha256: string; pieces: Metalink['pieces'] };
+}
+
+/** The mirrors to use and the hash to check them with; null when there are
+ * none, or no SHA-256 to prove their bytes. The Metalink file is asked
+ * for only where the server pointed to one, or where a redirector (whose
+ * own headers fetch hides) sent the download elsewhere. */
+async function discover(requested: string, probe: Probe): Promise<Found | null> {
+  const total = probe.total;
+  if (!probe.ranges || total === null || total < MIRROR_MIN) return null;
+  const links = parseLinks(probe.link, probe.url);
+  let mirrors = links.mirrors;
+  let sha256 = parseDigest(probe.digest, probe.reprDigest);
+  let pieces: Metalink['pieces'] = null;
+  let meta = links.metalink;
+  let guessed = false;
+  if (!meta && !mirrors.length && hostOf(requested) !== hostOf(probe.url)) {
+    const u = new URL(requested);
+    if (!u.search && !u.hash) {
+      meta = `${u.origin}${u.pathname}.meta4`;
+      guessed = true;
+    }
+  }
+  // The Metalink file lives where the server said; cookies go only to the
+  // download's own server, never to another party, nor with a guess.
+  if (meta && !guessed && allowed([{ url: meta, pri: 1 }], probe.url).length === 0) meta = null;
+  if (meta && (!mirrors.length || !sha256)) {
+    const m = await metalink(meta, !guessed && new URL(meta).origin === new URL(probe.url).origin);
+    if (m && (m.size === null || m.size === total)) {
+      sha256 ??= m.sha256;
+      if (m.pieces && m.pieces.hashes.length === Math.ceil(total / m.pieces.length)) pieces = m.pieces;
+      if (!mirrors.length) mirrors = best(m.mirrors, probe.url);
+    }
+  }
+  // Not the same server under another name: it shares its host's budget.
+  const own = new Set([hostOf(probe.url), hostOf(requested)]);
+  mirrors = allowed(mirrors, probe.url).filter((m) => !own.has(hostOf(m.url)));
+  if (!sha256 || !mirrors.length) return null;
+  return { mirrors, check: { sha256, pieces } };
+}
+
+async function metalink(url: string, cookies: boolean): Promise<Metalink | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: 'application/metalink4+xml' },
+      credentials: cookies ? 'include' : 'omit',
+      cache: 'no-store',
+      signal: AbortSignal.any([abort.signal, AbortSignal.timeout(META4_WAIT_MS)]),
+    });
+    const length = Number(res.headers.get('content-length') ?? 0);
+    if (!res.ok || length > META4_MAX) {
+      void res.body?.cancel();
+      return null;
+    }
+    // Read up to the limit, whatever the server claims its length is.
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const parts: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > META4_MAX) {
+        void reader.cancel().catch(() => {});
+        return null;
+      }
+      parts.push(value);
+    }
+    const text = new TextDecoder().decode(await new Blob(parts as BlobPart[]).arrayBuffer());
+    return parseMeta4(text, res.url || url);
+  } catch {
+    if (abort.signal.aborted) throw abort.signal.reason;
+    return null;
+  }
+}
+
+/**
+ * Checks the finished file against the server's SHA-256. Returns null when
+ * it matches, else the ranges to fetch again from the server itself: the
+ * pieces whose own hash differs when the Metalink lists them, otherwise
+ * everything that came from mirrors.
+ */
+async function verify(handle: SyncAccessHandle, total: number, check: Found['check']): Promise<[number, number][] | null> {
+  const whole = new Sha256();
+  const pieces = check.pieces;
+  const bad: [number, number][] = [];
+  const buffer = new Uint8Array(VERIFY_SLICE);
+  let piece = pieces ? new Sha256() : null;
+  let pieceIndex = 0;
+  let pieceFill = 0;
+  for (let at = 0; at < total; ) {
+    const n = handle.read(buffer.subarray(0, Math.min(VERIFY_SLICE, total - at)), { at });
+    if (n <= 0) throw new Fail('diskWrite', false, true, { detail: 'read returned 0' });
+    const data = buffer.subarray(0, n);
+    whole.update(data);
+    if (pieces && piece) {
+      for (let off = 0; off < n; ) {
+        const take = Math.min(n - off, pieces.length - pieceFill);
+        piece.update(data.subarray(off, off + take));
+        off += take;
+        pieceFill += take;
+        const start = pieceIndex * pieces.length;
+        if (pieceFill === pieces.length || start + pieceFill === total) {
+          if (piece.hex() !== pieces.hashes[pieceIndex]) bad.push([start, start + pieceFill]);
+          piece = new Sha256();
+          pieceIndex++;
+          pieceFill = 0;
+        }
+      }
+    }
+    at += n;
+    // Lets a pause or cancel through while a large file is read.
+    await sleep(0);
+    if (abort.signal.aborted) throw abort.signal.reason;
+  }
+  if (whole.hex() === check.sha256) return null;
+  return merged(pieces && bad.length ? bad : mirrored);
 }
 
 /** For servers without ranges: one stream, restarted on failure. */
@@ -481,7 +754,8 @@ async function pump(
   segs: Segments,
   id: number,
   stop?: AbortSignal,
-  onData?: () => void,
+  /** Each chunk kept: where it went in the file and how long it is. */
+  onData?: (offset: number, take: number) => void,
 ) {
   if (!res.body) return;
   const reader = res.body.getReader();
@@ -496,8 +770,8 @@ async function pump(
       if (stop?.aborted) throw stop.reason;
       if (done) return;
       lastDataAt = performance.now();
-      onData?.();
       const { offset, take } = segs.claim(id, value.byteLength);
+      onData?.(offset, take);
       buffer.add(handle, take < value.byteLength ? value.subarray(0, take) : value, offset);
       received += take;
       if (take < value.byteLength) return;
@@ -525,12 +799,14 @@ function write(handle: SyncAccessHandle, data: Uint8Array, at: number) {
   }
 }
 
-function request(url: string, headers: Record<string, string>, stop?: AbortSignal): Promise<Response> {
+function request(url: string, headers: Record<string, string>, stop?: AbortSignal, mirror = false): Promise<Response> {
   // The browser adds the site's cookies and its own user agent, exactly as
   // for its own downloads; host permissions lift the CORS restrictions.
+  // A mirror is another party: no cookies, no page address.
   return fetch(url, {
     headers,
-    credentials: 'include',
+    credentials: mirror ? 'omit' : 'include',
+    referrerPolicy: mirror ? 'no-referrer' : undefined,
     cache: 'no-store',
     redirect: 'follow',
     signal: stop ? AbortSignal.any([abort.signal, stop]) : abort.signal,

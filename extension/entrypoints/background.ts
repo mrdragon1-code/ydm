@@ -438,6 +438,7 @@ export default defineBackground(() => {
           connections: item.connectionsSent!,
           // What worked best on this host before: no slow ramp-up again.
           hint: hostCaps[item.host ?? hostOf(item.url)]?.best,
+          mirrors: settings.mirrors,
           resume: item.checkpoint,
           limit: item.limitSent,
           checksum: settings.checksum,
@@ -557,6 +558,11 @@ export default defineBackground(() => {
       case 'inspected':
         void checkFile(item, event.name, event.sha256, new Uint8Array(event.head));
         return;
+      case 'mirrors':
+        item.servers = event.servers;
+        item.verified = event.verified;
+        schedulePersist();
+        return notify(item.id);
       case 'capped':
       case 'tuned': {
         // What the server tolerates and what worked best: remembered for
@@ -1062,6 +1068,8 @@ export default defineBackground(() => {
           toBrowser: undefined,
           // Checked again from scratch, as a new download.
           sha256: undefined,
+          servers: undefined,
+          verified: undefined,
           security: undefined,
           heldAt: undefined,
           allowed: undefined,
@@ -1116,7 +1124,7 @@ export default defineBackground(() => {
 
   /** The whole list (`changed` null), or only the items in `changed`. */
   function snapshot(changed: Set<number> | null): PopupState {
-    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url, finalUrl, sha256, downloadId, security, heldAt }: Entry): Item => ({
+    const view = ({ id, name, state, done, total, speed, reason, elapsed, parts, checkpoint, url, finalUrl, sha256, servers, verified, downloadId, security, heldAt }: Entry): Item => ({
       id,
       name,
       state,
@@ -1128,6 +1136,8 @@ export default defineBackground(() => {
       parts,
       url: finalUrl ?? url,
       sha256,
+      servers,
+      verified,
       downloadId,
       security,
       heldAt,

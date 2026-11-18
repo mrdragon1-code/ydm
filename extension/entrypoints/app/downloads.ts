@@ -312,6 +312,11 @@ export function downloadsScreen(send: (cmd: PopupCommand) => void, openAlert: (i
     $('dSpeedLabel').textContent = t(average ? 'downloads.avgSpeed' : 'downloads.speedNow');
     const n = working(item.parts);
     $('dConns').textContent = item.state === 'running' && n ? String(n) : '—';
+    // Mirrors used: how many servers, and whether the file matched the
+    // hash the server gave.
+    $('dServers').textContent = item.servers
+      ? t(item.verified ? 'downloads.serversVerified' : 'downloads.serversMismatch', { count: item.servers })
+      : '—';
     // A fact with no value yet is left out, not shown as a dash.
     for (const dd of $('detailsBody').querySelectorAll<HTMLElement>('.facts dd')) {
       dd.parentElement!.hidden = dd.textContent === '—';

@@ -29,6 +29,9 @@ export interface Settings {
   notify: boolean;
   /** SHA-256 of every finished file, shown in the downloads page. */
   checksum: boolean;
+  /** Also download from the mirrors a server names for its file, when it
+   * gives the file's SHA-256 to check the result against. */
+  mirrors: boolean;
   /** Checks on the device for every download; never sends anything. */
   scanLocal: boolean;
   /** The user's own VirusTotal key: asks about the file's SHA-256 and the
@@ -55,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   notify: true,
   checksum: true,
+  mirrors: true,
   scanLocal: true,
   virusTotalKey: '',
   abuseChKey: '',
@@ -118,6 +122,7 @@ export function readSettings(stored: Record<string, unknown>): Settings {
       : d.language,
     notify: typeof stored.notify === 'boolean' ? stored.notify : d.notify,
     checksum: typeof stored.checksum === 'boolean' ? stored.checksum : d.checksum,
+    mirrors: typeof stored.mirrors === 'boolean' ? stored.mirrors : d.mirrors,
     scanLocal: typeof stored.scanLocal === 'boolean' ? stored.scanLocal : d.scanLocal,
     virusTotalKey: apiKey(stored.virusTotalKey),
     abuseChKey: apiKey(stored.abuseChKey),
