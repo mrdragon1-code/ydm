@@ -168,6 +168,8 @@ test('the downloads page: kinds, Delete, "Retry failed", paste anywhere', async 
 
   // Delete removes the focused row.
   const pdf = rows.filter({ hasText: 'report.pdf' });
+  // Only a finished download can be removed (not while it is being saved).
+  await expect(pdf).toHaveAttribute('data-state', 'completed');
   await pdf.click();
   await pdf.press('Delete');
   await expect(rows).toHaveCount(1);
