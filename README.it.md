@@ -10,8 +10,14 @@ estensione e funziona subito: niente programmi da installare, niente finestre.
 - **Prende i download grandi** (da 5 MB in su, http/https) e li scarica a pezzi paralleli.
   Il resto lo lascia al browser: file piccoli, dimensione sconosciuta, incognito, risultati
   di un modulo POST.
-- **Connessioni adattive**: parte con quattro e ne aggiunge solo finché la velocità cresce;
-  se un sito ne rifiuta altre, se lo ricorda per una settimana.
+- **Connessioni adattive**: fino a sei, aggiunte solo finché la velocità cresce (e
+  riprovate più tardi). Ricorda per un mese cosa ha funzionato meglio su ogni sito, così il
+  download successivo parte già lì; se un sito rifiuta connessioni (429, 503) ne usa meno,
+  e quel limite risale col tempo.
+- **Mirror (RFC 6249)**: se un server indica copie del file su altri server **e** dà il suo
+  SHA-256, YDM scarica da più server insieme, controlla il file finito con l'hash e
+  riscarica dal sito stesso ciò che non corrisponde. Ai mirror non vanno cookie né Referer.
+  Senza hash i mirror non vengono mai usati.
 - **Rispetta il limite del browser**: i browser aprono al massimo sei connessioni per sito.
   YDM le divide tra i suoi download da quel sito invece di mettersi in coda da solo.
 - **Niente pezzo lento alla fine**: una connessione libera aiuta il pezzo che finirà per

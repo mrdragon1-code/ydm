@@ -4,10 +4,12 @@
  * checks and saving work unchanged.
  *
  * A stream is one or two tracks (video with its audio inside, or video
- * and audio apart), each a list of segments. Segments are fetched a few
- * at a time and appended in order to the track's file; checkpoints let a
- * closed browser resume at the next segment, and only for the very same
- * stream. AES-128 (HLS) is decrypted with WebCrypto.
+ * and audio apart), each a list of segments. Both tracks are fetched at
+ * once, several segments at a time (lib/window.ts: a slow one does not
+ * hold the others up), and appended in order to the track's file. A track
+ * that is one big file is fetched in ranged pieces the same way.
+ * Checkpoints let a closed browser resume at the next segment, and only
+ * for the very same stream. AES-128 (HLS) is decrypted with WebCrypto.
  *
  * At the end the video becomes one MP4, without re-encoding:
  * - fragmented MP4 tracks already are MP4 (their init section first);
@@ -26,9 +28,10 @@ import type { Text } from './i18n';
 import { type Key, type Playlist, parsePlaylist, sequenceIv } from './media';
 import { fromUrl, sanitize } from './naming';
 import type { WorkerCommand, WorkerEvent } from './protocol';
+import { inOrder } from './window';
 
-/** Segments fetched at once: enough to fill a fast line with ~2-6 s pieces. */
-const PARALLEL = 4;
+/** A track that is one file is fetched in pieces of this size. */
+const CHUNK = 4 * 1024 * 1024;
 const RETRIES = 4;
 const PROGRESS_MS = 500;
 /** At most this much transfer is redone after the browser is closed. */
@@ -63,14 +66,37 @@ const CANCELLED = new Fail({ key: 'reason.cancelled' });
 const STOPPED = new Fail({ key: 'reason.cancelled' });
 const abort = new AbortController();
 let proceed: (() => void) | null = null;
+/** Requests at once, the per-host connection budget, shared by the tracks. */
+let width = 4;
+/** Speed limit in bytes per second, 0 for none. */
+let rate = 0;
+let allowance = 0;
+let refilled = 0;
 
 scope.onmessage = (e) => {
   const cmd = e.data;
   if (cmd.type === 'start') void run(cmd);
   else if (cmd.type === 'cancel') abort.abort(CANCELLED);
   else if (cmd.type === 'proceed') proceed?.();
-  // Speed limit and connection budget: not applied to streams yet.
+  else if (cmd.type === 'connections') width = Math.max(1, cmd.max);
+  else if (cmd.type === 'limit') setRate(cmd.bytesPerSecond);
 };
+
+function setRate(bytesPerSecond: number) {
+  rate = Math.max(0, bytesPerSecond);
+  allowance = 0;
+  refilled = performance.now();
+}
+
+/** With a speed limit, waits after each piece until it fits the budget. */
+async function throttle(bytes: number) {
+  if (!rate) return;
+  const now = performance.now();
+  allowance = Math.min(rate, allowance + ((now - refilled) * rate) / 1000);
+  refilled = now;
+  allowance -= bytes;
+  if (allowance < 0) await new Promise((r) => setTimeout(r, (-allowance / rate) * 1000));
+}
 
 // --- what to fetch -------------------------------------------------------------
 
@@ -186,10 +212,14 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
       return h;
     };
 
+    width = Math.max(1, cmd.connections);
+    setRate(cmd.limit ?? 0);
     const plan = await planFor(cmd.url, cmd.kind === 'dash' ? 'dash' : 'hls');
     const name = sanitize(cmd.name || `${fromUrl(plan.url)?.replace(/\.(m3u8|mpd)$/i, '') || 'video'}.mp4`);
     scope.postMessage({ type: 'started', name, total: null, url: plan.url });
     await originsReady(plan);
+    // After the Referer rules: the size check goes to the pieces' host.
+    await inPieces(plan);
 
     const out = await open(cmd.file);
     // One fMP4 track is written straight into the final file.
@@ -229,8 +259,16 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
       scope.postMessage({ type: 'progress', done, total: total && Math.max(total, done) });
     }, PROGRESS_MS);
 
-    for (let i = 0; i < plan.tracks.length; i++) {
-      await download(plan.tracks[i]!, states[i]!, raws[i]!, () => checkpoint(validator, states));
+    // Both tracks' data on disk before any checkpoint claims it.
+    const save = () => saveNow!();
+    if (plan.tracks.length > 1 && width >= 2) {
+      // Video and audio at once; audio pieces are small, so it gets a third.
+      const audio = () => Math.max(1, Math.floor(width / 3));
+      const shares = [() => Math.max(1, width - audio()), audio];
+      await Promise.all(plan.tracks.map((t, i) => download(t, states[i]!, raws[i]!, shares[i]!, save)));
+    } else {
+      // One connection allowed: one track after the other.
+      for (let i = 0; i < plan.tracks.length; i++) await download(plan.tracks[i]!, states[i]!, raws[i]!, () => width, save);
     }
     saveNow();
 
@@ -283,7 +321,7 @@ async function run(cmd: Extract<WorkerCommand, { type: 'start' }>) {
 }
 
 /** One track's segments, in order, after its init section. */
-async function download(track: TrackPlan, state: TrackState, raw: SyncAccessHandle, save: () => void) {
+async function download(track: TrackPlan, state: TrackState, raw: SyncAccessHandle, share: () => number, save: () => void) {
   if (track.init && state.next === 0 && state.bytes === 0) {
     const init = await fetchBytes(track.init.url, track.init.range);
     // Encrypted (DRM) tracks are refused before anything else is fetched.
@@ -314,30 +352,57 @@ async function download(track: TrackPlan, state: TrackState, raw: SyncAccessHand
     return;
   }
   const keys = new Map<string, Promise<CryptoKey>>();
-  const pending = new Map<number, Promise<Uint8Array>>();
-  const fetchPart = (i: number) => {
-    const part = track.parts[i]!;
-    const p = fetchBytes(part.url, part.range).then((data) => decrypt(data, part, keys));
-    // A failure is handled when its turn comes; until then it must not
-    // count as unhandled.
-    p.catch(() => {});
-    pending.set(i, p);
-  };
-  for (let i = state.next; i < Math.min(count, state.next + PARALLEL); i++) fetchPart(i);
   let saved = Date.now();
-  while (state.next < count) {
-    const data = await pending.get(state.next)!;
-    pending.delete(state.next);
-    if (state.next + PARALLEL < count) fetchPart(state.next + PARALLEL);
-    write(raw, data, state.bytes);
-    state.bytes += data.byteLength;
-    state.sizes.push(data.byteLength);
-    state.next++;
-    if (Date.now() - saved >= CHECKPOINT_MS) {
-      raw.flush();
-      save();
-      saved = Date.now();
+  await inOrder<Uint8Array>({
+    from: state.next,
+    to: count,
+    width: share,
+    signal: abort.signal,
+    // With a speed limit pieces are slow on purpose: not asked for twice.
+    hedge: () => rate === 0,
+    fetch: async (i, signal) => {
+      const part = track.parts[i]!;
+      const data = await decrypt(await fetchBytes(part.url, part.range, signal), part, keys);
+      await throttle(data.byteLength);
+      return data;
+    },
+    size: (data) => data.byteLength,
+    write: (_, data) => {
+      write(raw, data, state.bytes);
+      state.bytes += data.byteLength;
+      state.sizes.push(data.byteLength);
+      state.next++;
+      if (Date.now() - saved >= CHECKPOINT_MS) {
+        save();
+        saved = Date.now();
+      }
+    },
+  });
+}
+
+/**
+ * A track that is one big file (DASH with a file per track) becomes
+ * ranged pieces, fetched several at once like segments, when the server
+ * answers ranges. Otherwise it stays one stream.
+ */
+async function inPieces(plan: Plan) {
+  for (const track of plan.tracks) {
+    const part = track.parts[0]!;
+    // fMP4 only: MPEG-TS cut at arbitrary bytes would split its packets.
+    if (track.parts.length !== 1 || track.format !== 'fmp4' || part.key?.method === 'AES-128') continue;
+    let offset = 0;
+    let length: number | null = null;
+    if (part.range) {
+      ({ offset, length } = part.range);
+    } else {
+      length = await sizeOf(part.url);
     }
+    if (!length || length <= 2 * CHUNK) continue;
+    const pieces: Part[] = [];
+    for (let at = 0; at < length; at += CHUNK) {
+      pieces.push({ url: part.url, range: { offset: offset + at, length: Math.min(CHUNK, length - at) }, sequence: pieces.length });
+    }
+    track.parts = pieces;
   }
 }
 
@@ -374,14 +439,18 @@ function originsReady(plan: Plan): Promise<void> {
 
 // --- network -----------------------------------------------------------------------
 
-async function request(url: string, range?: Range): Promise<Response> {
+async function request(url: string, range?: Range, stop?: AbortSignal): Promise<Response> {
   let last: unknown;
   for (let attempt = 0; attempt <= RETRIES; attempt++) {
     if (abort.signal.aborted) throw abort.signal.reason;
+    if (stop?.aborted) throw stop.reason;
     try {
       const res = await fetch(url, {
         credentials: 'include',
-        signal: abort.signal,
+        // Not through the HTTP cache: a second request for a stuck piece
+        // would wait there for the first one to finish.
+        cache: 'no-store',
+        signal: stop ? AbortSignal.any([abort.signal, stop]) : abort.signal,
         headers: range ? { Range: `bytes=${range.offset}-${range.offset + range.length - 1}` } : undefined,
       });
       if (res.ok) return res;
@@ -390,6 +459,7 @@ async function request(url: string, range?: Range): Promise<Response> {
       last = new Fail({ key: res.status >= 500 ? 'reason.serverError' : 'reason.unexpected', params: { status: res.status } }, true);
     } catch (e) {
       if (abort.signal.aborted) throw abort.signal.reason;
+      if (stop?.aborted) throw stop.reason;
       if (e instanceof Fail) throw e;
       last = e;
     }
@@ -398,8 +468,34 @@ async function request(url: string, range?: Range): Promise<Response> {
   throw last instanceof Fail ? last : new Fail({ key: 'reason.network' }, true);
 }
 
-async function fetchBytes(url: string, range?: Range): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(await (await request(url, range)).arrayBuffer());
+async function fetchBytes(url: string, range?: Range, stop?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await request(url, range, stop);
+    const data = new Uint8Array(await res.arrayBuffer());
+    // A server (or a proxy) that ignores the range sends the whole file:
+    // wrong bytes. Asked once more, then given up.
+    if (!range || data.byteLength === range.length) return data;
+    if (attempt >= 1) throw new Fail({ key: 'reason.wrongPart' }, true);
+  }
+}
+
+/** A file's size, when its server answers ranges; null otherwise. Retried:
+ * a passing error would change how the track is split, and a resume would
+ * then start over. */
+async function sizeOf(url: string): Promise<number | null> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (abort.signal.aborted) throw abort.signal.reason;
+    const res = await fetch(url, { credentials: 'include', cache: 'no-store', signal: abort.signal, headers: { Range: 'bytes=0-0' } }).catch(
+      () => null,
+    );
+    void res?.body?.cancel().catch(() => {});
+    if (res && (res.status === 200 || res.status === 206)) {
+      const m = res.status === 206 ? /\/(\d+)\s*$/.exec(res.headers.get('content-range') ?? '') : null;
+      return m ? Number(m[1]) : null;
+    }
+    await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+  }
+  return null;
 }
 
 async function decrypt(data: Uint8Array<ArrayBuffer>, part: Part, keys: Map<string, Promise<CryptoKey>>): Promise<Uint8Array> {

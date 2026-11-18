@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   describeSaveError,
   isProgram,
+  migrateSettings,
   normalizeHost,
   readSettings,
   shouldIntercept,
@@ -78,7 +79,7 @@ describe('readSettings', () => {
   it('fills in defaults and rejects values out of range', () => {
     expect(readSettings({})).toEqual(DEFAULT_SETTINGS);
     const s = readSettings({ connections: 99, parallel: 2, minSize: -1, programsToBrowser: 'no', excluded: ['a.com', 3] });
-    expect(s).toMatchObject({ connections: 4, parallel: 2, minSize: DEFAULT_SETTINGS.minSize, programsToBrowser: true });
+    expect(s).toMatchObject({ connections: 6, parallel: 2, minSize: DEFAULT_SETTINGS.minSize, programsToBrowser: true });
     expect(s.excluded).toEqual(['a.com']);
   });
 });
@@ -114,5 +115,14 @@ describe('folder settings', () => {
     expect(s.folders.documents).toBe('Documents');
     expect(s.folders.audio).toBe('');
     expect(s.rules).toEqual([{ kind: 'site', match: 'example.com', folder: 'Ex' }]);
+  });
+});
+
+describe('settings after an update', () => {
+  it('the old default of 4 connections becomes 6, once', () => {
+    expect(migrateSettings({ connections: 4 })).toEqual({ settingsRev: 2, connections: 6 });
+    expect(migrateSettings({ connections: 2 })).toEqual({ settingsRev: 2 });
+    expect(migrateSettings({})).toEqual({ settingsRev: 2 });
+    expect(migrateSettings({ connections: 4, settingsRev: 2 })).toBeNull();
   });
 });

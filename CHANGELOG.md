@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.6.0
+
+### Faster
+- **Connections that really adapt**: up to six per download by default (it was four, and
+  YDM never added more). YDM adds connections while the speed keeps rising, tries again
+  later when conditions change, and **remembers what worked best on each site**, so the
+  next download from it starts at full speed. A slow moment no longer lowers a site's
+  limit for a week; only a real refusal (429, 503) does, and that limit rises again over
+  time.
+- **Mirrors**: when a download site names copies of the file on other servers and gives
+  its SHA-256 (as openSUSE and other Linux and open-source sites do), YDM downloads from
+  several servers at once — in our tests 2.5× faster with two mirrors. The finished file
+  is checked against the hash; anything that does not match is fetched again from the site
+  itself. Mirrors get no cookies and no page address. Settings → "Use the mirrors the
+  server names" (on).
+- **Videos**: one slow piece no longer holds the others up (a stuck piece is asked for
+  again), video and audio download at the same time, and DASH videos stored as one big
+  file are fetched in several pieces at once. Videos now follow the speed limit too.
+- Dead connections are noticed in 10 seconds instead of 20; connections crawling behind
+  the others near the end start over sooner.
+
 ## 1.5.0
 
 ### New

@@ -45,6 +45,10 @@ export interface Item {
   url?: string;
   /** Of the finished file; `pending` while it is computed. */
   sha256?: string;
+  /** Downloaded from mirrors too: how many servers, and whether the file
+   * matched the SHA-256 the server gave. */
+  servers?: number;
+  verified?: boolean;
   /** Where the browser saved it, once known. */
   downloadId?: number;
   /** The security checks' verdict, once there is one. */
@@ -65,6 +69,8 @@ export interface Checkpoint {
   /** A stream (HLS, DASH): per track, the segments before `next` are on
    * disk, `bytes` long including an init section of `init` bytes. */
   stream?: { tracks: { next: number; bytes: number; init: number; sizes: number[] }[] };
+  /** Bytes taken from mirrors so far, and the hash that must prove them. */
+  mirrors?: { sha256: string; ranges: [number, number][] };
 }
 
 /** Background → engine. */
@@ -75,6 +81,10 @@ export type EngineCommand =
       url: string;
       name?: string;
       connections: number;
+      /** Connections that worked best on this host before: start there. */
+      hint?: number;
+      /** Mirrors the server names may be used (with its SHA-256). */
+      mirrors?: boolean;
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
       limit: number;
@@ -108,6 +118,10 @@ export type EngineEvent =
   | { type: 'started'; id: number; name: string; total: number | null; url: string }
   /** The server refused more connections than this. */
   | { type: 'capped'; id: number; connections: number }
+  /** What worked best on this host, remembered for its next download. */
+  | { type: 'tuned'; id: number; connections: number; speed: number; most: number; refused: boolean }
+  /** Mirrors were used: how many servers, and whether the hash matched. */
+  | { type: 'mirrors'; id: number; servers: number; verified: boolean }
   | { type: 'progress'; id: number; done: number; total: number | null; parts?: Part[] }
   | { type: 'checkpoint'; id: number; checkpoint: Checkpoint }
   | { type: 'ready'; id: number; name: string; blobUrl: string }
@@ -125,6 +139,8 @@ export type WorkerCommand =
       url: string;
       name?: string;
       connections: number;
+      hint?: number;
+      mirrors?: boolean;
       file: string;
       resume?: Checkpoint;
       /** Bytes per second, 0 for no limit. */
@@ -142,6 +158,8 @@ export type WorkerCommand =
 export type WorkerEvent =
   | { type: 'started'; name: string; total: number | null; url: string }
   | { type: 'capped'; connections: number }
+  | { type: 'tuned'; connections: number; speed: number; most: number; refused: boolean }
+  | { type: 'mirrors'; servers: number; verified: boolean }
   | { type: 'progress'; done: number; total: number | null; parts?: Part[] }
   /** Everything outside `missing` has been flushed to disk. */
   | { type: 'checkpoint'; checkpoint: Checkpoint }

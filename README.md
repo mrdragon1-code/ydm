@@ -21,8 +21,15 @@ Browser
 - **Takes over large downloads** (5 MB and up, http/https) and fetches them in parallel
   pieces. Everything else stays with the browser: small files, unknown sizes, incognito,
   results of a form POST (YDM would repeat them as a GET).
-- **Adaptive connections**: starts with four, adds more only while the speed keeps rising,
-  backs off for good on a server that refuses them (remembered per site for a week).
+- **Adaptive connections**: up to six, added only while the speed keeps rising (and tried
+  again later). What worked best on a site is remembered for a month, so the next download
+  from it starts there; a server that refuses connections (429, 503) gets fewer, and that
+  limit rises again over time.
+- **Mirrors (RFC 6249)**: when a server names copies of the file on other servers
+  (`Link: rel=duplicate` or a Metalink file) **and** gives its SHA-256 (`Digest`,
+  `Repr-Digest`, Metalink), YDM downloads from up to four servers at once, checks the
+  finished file against the hash and fetches again from the site itself whatever does not
+  match. Mirrors get no cookies and no Referer. Without a hash, mirrors are never used.
 - **Shares the browser's limit**: browsers open at most six connections to one site. YDM
   divides those six among its downloads from that site instead of queueing behind itself,
   and gives a finished download's share to the others.
@@ -63,10 +70,12 @@ Browser
 
 1. **First request** — `GET` with `Range: bytes=0-`: its headers give the size, range
    support, ETag and name, and its body becomes the first piece. No separate probe.
-2. **Pieces** — four connections to start, more while they pay off, within the site's
-   share of the browser's six.
+2. **Pieces** — four connections to start (or the site's best count, if known), more while
+   they pay off, within the site's share of the browser's six; mirrors, when allowed, each
+   with their own connections.
 3. **Refused connections** — after two failures in a row a connection retires and leaves
-   its piece to the others; the download fails only if all of them fail.
+   its piece to the others; the download fails only if all of them fail. A mirror that
+   fails or sends a different file is dropped at once.
 4. **Writing** — network chunks are gathered into 1 MB writes at their exact place in the
    OPFS file: memory use does not depend on the file size.
 5. **Saving** — the browser copies the file to Downloads, picking the final name and
@@ -98,6 +107,10 @@ not run for files YDM saves; hence the "Leave programs to the browser" setting.
 |---|---|---|
 | Chromium | 12.2 s | 3.4 s |
 | Firefox | 12.7 s | 3.1 s |
+
+24 MB from a site limited to 256 KB/s per connection that names two mirrors and gives the
+file's SHA-256 (Chromium): 18.7 s from the site alone, **7.7 s** with its mirrors, hash
+checked.
 
 ## Install
 

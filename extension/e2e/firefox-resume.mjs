@@ -19,9 +19,10 @@ const SIZE_MB = 24;
 
 const dir = mkdtempSync(path.join(tmpdir(), 'ydm-firefox-dl-'));
 const profile = mkdtempSync(path.join(tmpdir(), 'ydm-firefox-profile-'));
-// 512 KB/s per connection: about 12 s with four connections.
+// 128 KB/s per connection: about 30 s even with all six connections, so
+// Firefox is closed well before the end.
 const server = spawn(path.join(ROOT, 'engine/target/release/ydm-testserver.exe'), [
-  '--port', '0', '--size', String(SIZE_MB), '--rate', '512', '--filename', 'big.bin', '--log',
+  '--port', '0', '--size', String(SIZE_MB), '--rate', '128', '--filename', 'big.bin', '--log',
 ]);
 let log = '';
 server.stdout.on('data', (c) => (log += c));

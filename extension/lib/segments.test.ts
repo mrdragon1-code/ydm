@@ -131,6 +131,28 @@ describe('Segments', () => {
     expect(segs.straggler()).toBe(2);
   });
 
+  it('near the end, a connection at under half the others\' speed counts as slow', () => {
+    const { segs, run } = timed(64 * MB, 3);
+    run([4 * MB, 4 * MB, 1.5 * MB], 2000);
+    // Early on, 1.5 of 4 MB/s is tolerated…
+    expect(segs.straggler()).toBeNull();
+    // …but not once almost everything is on disk.
+    for (const s of segs.list) s.pos = s.sampledPos = Math.max(s.pos, s.end - 3 * MB);
+    run([4 * MB, 4 * MB, 1.5 * MB], 500);
+    expect(segs.straggler()).toBe(2);
+  });
+
+  it('a just-started range is not split while a measured one can be', () => {
+    const { segs, run } = timed(64 * MB, 2);
+    run([2 * MB, 2 * MB], 1000);
+    // A new connection gets the tail of a measured range…
+    const fresh = segs.addWork()!;
+    // …and the next one does not cut that brand-new range in half.
+    const next = segs.addWork()!;
+    expect(segs.get(next).end).not.toBe(segs.get(fresh).end);
+    assertContiguous(segs, 64 * MB);
+  });
+
   it('no straggler when all are alike', () => {
     const { segs, run } = timed(64 * MB, 3);
     run([4 * MB, 3 * MB, 4 * MB], 2000);

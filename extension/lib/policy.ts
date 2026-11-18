@@ -9,9 +9,10 @@ export interface Settings {
   enabled: boolean;
   /** Below this, parallel connections gain nothing. */
   minSize: number;
-  /** Most parallel connections per download. YDM starts with fewer and
-   * adds more while the speed keeps rising. Browsers open at most six
-   * HTTP/1.1 connections per host, shared by all downloads from it. */
+  /** Most parallel connections per download: a ceiling. YDM starts with
+   * fewer (or with what worked best on the site before) and adds more while
+   * the speed keeps rising. Browsers open at most six HTTP/1.1 connections
+   * per host, shared by all downloads from it. */
   connections: number;
   /** Downloads running at once; the rest wait. */
   parallel: number;
@@ -28,6 +29,9 @@ export interface Settings {
   notify: boolean;
   /** SHA-256 of every finished file, shown in the downloads page. */
   checksum: boolean;
+  /** Also download from the mirrors a server names for its file, when it
+   * gives the file's SHA-256 to check the result against. */
+  mirrors: boolean;
   /** Checks on the device for every download; never sends anything. */
   scanLocal: boolean;
   /** The user's own VirusTotal key: asks about the file's SHA-256 and the
@@ -46,7 +50,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   minSize: 5 * 1024 * 1024,
-  connections: 4,
+  connections: 6,
   parallel: 3,
   programsToBrowser: true,
   excluded: [],
@@ -54,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
   notify: true,
   checksum: true,
+  mirrors: true,
   scanLocal: true,
   virusTotalKey: '',
   abuseChKey: '',
@@ -66,6 +71,20 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export const SETTING_KEYS = Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[];
+
+/** Bumped when stored settings need a one-time change after an update. */
+export const SETTINGS_REV = 2;
+
+/** The stored values to change once after an update, or null. 1.6.0: the
+ * old default of 4 connections becomes 6, now that the number is only a
+ * ceiling and YDM finds the best count by itself. */
+export function migrateSettings(stored: Record<string, unknown>): Record<string, unknown> | null {
+  const rev = typeof stored.settingsRev === 'number' ? stored.settingsRev : 1;
+  if (rev >= SETTINGS_REV) return null;
+  const out: Record<string, unknown> = { settingsRev: SETTINGS_REV };
+  if (stored.connections === 4) out.connections = 6;
+  return out;
+}
 
 export const LIMITS = {
   minSizeMb: [1, 1000],
@@ -103,6 +122,7 @@ export function readSettings(stored: Record<string, unknown>): Settings {
       : d.language,
     notify: typeof stored.notify === 'boolean' ? stored.notify : d.notify,
     checksum: typeof stored.checksum === 'boolean' ? stored.checksum : d.checksum,
+    mirrors: typeof stored.mirrors === 'boolean' ? stored.mirrors : d.mirrors,
     scanLocal: typeof stored.scanLocal === 'boolean' ? stored.scanLocal : d.scanLocal,
     virusTotalKey: apiKey(stored.virusTotalKey),
     abuseChKey: apiKey(stored.abuseChKey),
